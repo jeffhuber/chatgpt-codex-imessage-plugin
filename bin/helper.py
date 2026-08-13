@@ -69,7 +69,7 @@ CONFIRM_HELPER_PATH = CODE_ROOT / "bin" / "chatgpt-codex-imessage-confirm"
 CHAT_DB_PATH = Path.home() / "Library" / "Messages" / "chat.db"
 HOST_DISPLAY_NAME = os.environ.get("IMESSAGE_HOST_DISPLAY_NAME", "ChatGPT/Codex")
 
-HELPER_VERSION = "0.1.0"
+HELPER_VERSION = "0.1.1"
 PROTOCOL_VERSION = "1.1"
 
 # ---------------------------------------------------------------------------
