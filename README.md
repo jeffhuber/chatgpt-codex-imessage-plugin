@@ -55,7 +55,19 @@ git clone https://github.com/jeffhuber/chatgpt-codex-imessage-plugin.git
 cd chatgpt-codex-imessage-plugin
 ```
 
-### Hardened Install (Recommended)
+### Standard Install
+
+```bash
+./install.sh
+```
+
+The standard installer keeps executable helper code in the clone and stores
+runtime state in `~/Library/Application Support/ChatGPTCodexIMessage`. It needs
+no administrator access, but another unsandboxed process running as your user
+could replace that code. Its default blocklist protects against accidental
+disclosure, not a compromised same-user process.
+
+### Hardened Install (Optional Defense-in-Depth)
 
 ```bash
 ./install-hardened.sh
@@ -84,18 +96,6 @@ python3 "$CODE_ROOT/tools/configure_allowlist.py" add +15551234567
 
 The allowlist is root-owned. A same-user process can submit read requests but
 cannot broaden the set of conversations the helper may return.
-
-### Standard Install
-
-```bash
-./install.sh
-```
-
-The standard installer keeps executable helper code in the clone and stores
-runtime state in `~/Library/Application Support/ChatGPTCodexIMessage`. It needs
-no administrator access, but another unsandboxed process running as your user
-could replace that code. Its default blocklist protects against accidental
-disclosure, not a compromised same-user process.
 
 Both installers:
 
@@ -153,6 +153,10 @@ Every send has two enforced gates:
    keyboard default.** The helper sends only after the user deliberately clicks
    **Send**.
 
+![Native send confirmation dialog. Cancel is the default action.](docs/images/send-confirm-dialog.png)
+
+*Native send confirmation dialog showing the recipient, service, and full message text. Cancel is the keyboard default. This is the same NSAlert dialog family used by the Claude Cowork and Grok Bot helpers.*
+
 The nonce prevents blind, replayed, and payload-swapped sends. It does not
 authorize a same-user process that can read and write the bridge. The native
 dialog is the final send authorization boundary. Cancel any unexpected dialog.
@@ -205,14 +209,15 @@ There is deliberately no arbitrary SQL, filesystem, AppleScript, or generic
 
 ## Coexistence
 
-These are independent helpers. Do not share a bridge folder, request queue, or Full Disk Access grant.
+These are **three independent helpers** maintained as separate implementations by
+design. They are not meant to be unified or share components. Each has its own
+isolated runtime state and identity.
 
 - **Grok Bot** — LaunchAgent `com.jeffhuber.grokbot-imessage`, wrapper `grokbot-imessage-helper` — https://github.com/jeffhuber/grokbot-imessage-skill
 - **Claude Cowork** — LaunchAgent `com.jeffhuber.claudecowork-imessage`, wrapper `claude-cowork-imessage-helper` — https://github.com/jeffhuber/claudecowork-imessage-skill
 - **ChatGPT/Codex** — LaunchAgent `com.jeffhuber.chatgpt-codex-imessage`, wrapper `chatgpt-codex-imessage-helper` — https://github.com/jeffhuber/chatgpt-codex-imessage-plugin
 
-This helper is independent from the sibling Claude Cowork and Grok Bot
-projects. All three can be installed and loaded at once:
+All three can be installed and loaded at once on the same Mac:
 
 | Host | LaunchAgent | Default hardened product root |
 |---|---|---|
@@ -238,7 +243,8 @@ LLM processing. Allowlist only the conversations appropriate for your use.
 
 Read [SECURITY.md](./SECURITY.md) before installing. Protocol details are in
 [docs/PROTOCOL.md](./docs/PROTOCOL.md), and the post-install checklist is in
-[docs/SMOKE_TEST.md](./docs/SMOKE_TEST.md).
+[docs/SMOKE_TEST.md](./docs/SMOKE_TEST.md). Release notes and version history
+are in [CHANGELOG.md](./CHANGELOG.md).
 
 ## Diagnose and Test
 

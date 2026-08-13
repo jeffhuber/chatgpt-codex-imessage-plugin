@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""cowork-imessage helper
+"""ChatGPT/Codex iMessage helper
 
 Runs on macOS, triggered by launchd when a new file lands in control/requests/.
 Scans the request queue, dispatches each whitelisted action against a snapshot
@@ -73,7 +73,7 @@ CONFIRM_HELPER_PATH = CODE_ROOT / "bin" / "chatgpt-codex-imessage-confirm"
 CHAT_DB_PATH = Path.home() / "Library" / "Messages" / "chat.db"
 HOST_DISPLAY_NAME = os.environ.get("IMESSAGE_HOST_DISPLAY_NAME", "ChatGPT/Codex")
 
-HELPER_VERSION = "0.1.1"
+HELPER_VERSION = "1.1.0"
 PROTOCOL_VERSION = "1.1"
 
 # ---------------------------------------------------------------------------
@@ -95,8 +95,8 @@ def _load_sibling(name: str):
     return mod
 
 
-# Route send_gate's state to our install tree so a non-default install
-# (helper lives somewhere other than ~/cowork-imessage/) still works.
+# Route send_gate's state to our install tree. Both the old and new
+# environment variables are set for one-release compatibility.
 os.environ.setdefault("IMESSAGE_BRIDGE_DIR", str(BRIDGE_ROOT))
 os.environ.setdefault("COWORK_IMESSAGE_BRIDGE_DIR", str(BRIDGE_ROOT))
 _send_gate = _load_sibling("send_gate")
