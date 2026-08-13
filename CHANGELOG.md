@@ -3,6 +3,11 @@
 Releases use semantic versioning for the helper, MCP server, and plugin package.
 The file-bridge protocol has its own major/minor compatibility version.
 
+## Unreleased
+
+- Refuse the retired `~/cowork-imessage` send-gate default; document three-host
+  coexistence.
+
 ## 0.1.1 - 2026-08-12
 
 - Open completed Messages snapshots as immutable, read-only databases so
