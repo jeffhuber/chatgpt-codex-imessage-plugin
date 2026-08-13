@@ -16,15 +16,21 @@ class BridgeDirMixin:
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory(prefix="chatgpt-codex-imessage-test-")
         self.addCleanup(self._tmp.cleanup)
-        self._old_bridge = os.environ.get("COWORK_IMESSAGE_BRIDGE_DIR")
+        self._old_bridge_new = os.environ.get("IMESSAGE_BRIDGE_DIR")
+        self._old_bridge_old = os.environ.get("COWORK_IMESSAGE_BRIDGE_DIR")
+        os.environ["IMESSAGE_BRIDGE_DIR"] = os.path.realpath(self._tmp.name)
         os.environ["COWORK_IMESSAGE_BRIDGE_DIR"] = os.path.realpath(self._tmp.name)
         self.addCleanup(self._restore_bridge)
 
     def _restore_bridge(self) -> None:
-        if self._old_bridge is None:
+        if self._old_bridge_new is None:
+            os.environ.pop("IMESSAGE_BRIDGE_DIR", None)
+        else:
+            os.environ["IMESSAGE_BRIDGE_DIR"] = self._old_bridge_new
+        if self._old_bridge_old is None:
             os.environ.pop("COWORK_IMESSAGE_BRIDGE_DIR", None)
         else:
-            os.environ["COWORK_IMESSAGE_BRIDGE_DIR"] = self._old_bridge
+            os.environ["COWORK_IMESSAGE_BRIDGE_DIR"] = self._old_bridge_old
 
 
 class SendConfirmationTests(BridgeDirMixin, unittest.TestCase):
