@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# macOS
+.DS_Store
+
+# Build artifacts (per-machine — users build locally via install.sh)
+bin/chatgpt-codex-imessage-helper
+bin/chatgpt-codex-imessage-confirm
+*.plugin
+
+# Runtime state (created by install.sh or helper)
+control/
+nonces/
+
+# User-specific privacy configuration
+contacts/blocked_chats.txt
+contacts/allowed_chats.txt
+contacts/read_policy.txt
+
+# Editor scratch
+*.swp
+.idea/
+.vscode/

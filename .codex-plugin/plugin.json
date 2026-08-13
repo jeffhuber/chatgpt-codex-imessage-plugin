@@ -1,0 +1,32 @@
+{
+  "name": "chatgpt-codex-imessage-plugin",
+  "version": "0.1.0",
+  "description": "Read, search, triage, and send iMessages through a local macOS helper.",
+  "author": {
+    "name": "Jeff Huber",
+    "url": "https://github.com/jeffhuber"
+  },
+  "homepage": "https://github.com/jeffhuber/chatgpt-codex-imessage-plugin",
+  "repository": "https://github.com/jeffhuber/chatgpt-codex-imessage-plugin",
+  "license": "MIT",
+  "keywords": ["imessage", "messages", "macos", "local"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "iMessage for ChatGPT and Codex",
+    "shortDescription": "Use iMessage from local ChatGPT Work and Codex.",
+    "longDescription": "Connect local ChatGPT Work and Codex sessions to Messages on this Mac through an isolated, permission-aware helper with allowlisted reads and native confirmation before every send.",
+    "developerName": "Jeff Huber",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "websiteURL": "https://github.com/jeffhuber/chatgpt-codex-imessage-plugin",
+    "privacyPolicyURL": "https://github.com/jeffhuber/chatgpt-codex-imessage-plugin/blob/main/SECURITY.md",
+    "termsOfServiceURL": "https://github.com/jeffhuber/chatgpt-codex-imessage-plugin/blob/main/LICENSE",
+    "defaultPrompt": [
+      "Review my recent iMessages and flag replies I owe.",
+      "Search my iMessages for a phrase.",
+      "Draft and send an iMessage after I approve it."
+    ],
+    "brandColor": "#237A57"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "local-imessage": {
+      "command": "./scripts/run-mcp-server.sh",
+      "cwd": ".",
+      "env_vars": ["CHATGPT_CODEX_IMESSAGE_BRIDGE"],
+      "startup_timeout_sec": 15,
+      "tool_timeout_sec": 90,
+      "default_tools_approval_mode": "writes"
+    }
+  }
+}
