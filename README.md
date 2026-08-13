@@ -205,6 +205,12 @@ There is deliberately no arbitrary SQL, filesystem, AppleScript, or generic
 
 ## Coexistence
 
+These are independent helpers. Do not share a bridge folder, request queue, or Full Disk Access grant.
+
+- **Grok Bot** — LaunchAgent `com.jeffhuber.grokbot-imessage`, wrapper `grokbot-imessage-helper` — https://github.com/jeffhuber/grokbot-imessage-skill
+- **Claude Cowork** — LaunchAgent `com.jeffhuber.claudecowork-imessage`, wrapper `claude-cowork-imessage-helper` — https://github.com/jeffhuber/claudecowork-imessage-skill
+- **ChatGPT/Codex** — LaunchAgent `com.jeffhuber.chatgpt-codex-imessage`, wrapper `chatgpt-codex-imessage-helper` — https://github.com/jeffhuber/chatgpt-codex-imessage-plugin
+
 This helper is independent from the sibling Claude Cowork and Grok Bot
 projects. All three can be installed and loaded at once:
 

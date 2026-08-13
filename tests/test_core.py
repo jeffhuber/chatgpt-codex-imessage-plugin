@@ -194,6 +194,11 @@ class SendGateTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(victim.stat().st_mode), 0o755)
         self.assertEqual(list(victim.iterdir()), [])
 
+    def test_missing_bridge_dir_env_raises(self) -> None:
+        os.environ.pop("COWORK_IMESSAGE_BRIDGE_DIR", None)
+        with self.assertRaisesRegex(RuntimeError, "COWORK_IMESSAGE_BRIDGE_DIR.*required"):
+            helper.mint_send_nonce("+14155551234", "hello", "iMessage")
+
 
 if __name__ == "__main__":
     unittest.main()
