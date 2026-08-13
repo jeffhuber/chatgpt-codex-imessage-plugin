@@ -3,7 +3,7 @@
 Releases use semantic versioning for the helper, MCP server, and plugin package.
 The file-bridge protocol has its own major/minor compatibility version.
 
-## 0.1.1 - Unreleased
+## 0.1.1 - 2026-08-12
 
 - Open completed Messages snapshots as immutable, read-only databases so
   WAL-marked snapshots do not require writable `-wal` or `-shm` sidecars.
