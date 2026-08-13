@@ -3,7 +3,7 @@
 Releases use semantic versioning for the helper, MCP server, and plugin package.
 The file-bridge protocol has its own major/minor compatibility version.
 
-## 0.1.0 - Unreleased
+## 0.1.0 - 2026-08-12
 
 - Add a local-only ChatGPT/Codex plugin with a bundled STDIO MCP server and
   task-focused iMessage skill.
