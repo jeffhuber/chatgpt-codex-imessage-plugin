@@ -5,6 +5,8 @@ The file-bridge protocol has its own major/minor compatibility version.
 
 ## Unreleased
 
+## 1.2.0 - 2026-08-13
+
 - Preserve an explicitly empty bridge environment variable so send-gate setup
   fails closed instead of silently selecting the default bridge.
 - Clarify standard and hardened installation as an explicit threat-model choice.
