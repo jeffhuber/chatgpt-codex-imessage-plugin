@@ -243,7 +243,8 @@ LLM processing. Allowlist only the conversations appropriate for your use.
 
 Read [SECURITY.md](./SECURITY.md) before installing. Protocol details are in
 [docs/PROTOCOL.md](./docs/PROTOCOL.md), and the post-install checklist is in
-[docs/SMOKE_TEST.md](./docs/SMOKE_TEST.md).
+[docs/SMOKE_TEST.md](./docs/SMOKE_TEST.md). Release notes and version history
+are in [CHANGELOG.md](./CHANGELOG.md).
 
 ## Diagnose and Test
 
