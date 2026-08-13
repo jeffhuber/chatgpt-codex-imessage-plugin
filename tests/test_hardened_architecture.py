@@ -166,7 +166,7 @@ class WrapperValidationTests(unittest.TestCase):
                     f'-DPYTHON_INTERPRETER="{sys.executable}"',
                     "-o",
                     str(wrapper),
-                    str(REPO_ROOT / "bin" / "cowork_imessage_helper.c"),
+                    str(REPO_ROOT / "bin" / "imessage_helper.c"),
                 ],
                 capture_output=True,
                 text=True,

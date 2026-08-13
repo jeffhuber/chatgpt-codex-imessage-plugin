@@ -5,6 +5,9 @@ The file-bridge protocol has its own major/minor compatibility version.
 
 ## Unreleased
 
+- Rename wrapper source `bin/cowork_imessage_helper.c` → `bin/imessage_helper.c`.
+- Export `IMESSAGE_BRIDGE_DIR` from wrapper; keep `COWORK_IMESSAGE_BRIDGE_DIR` as a
+  one-release alias (Python prefers new name, falls back to old).
 - Refuse the retired `~/cowork-imessage` send-gate default; document three-host
   coexistence.
 

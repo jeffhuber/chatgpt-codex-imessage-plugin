@@ -195,9 +195,38 @@ class SendGateTests(unittest.TestCase):
         self.assertEqual(list(victim.iterdir()), [])
 
     def test_missing_bridge_dir_env_raises(self) -> None:
+        os.environ.pop("IMESSAGE_BRIDGE_DIR", None)
         os.environ.pop("COWORK_IMESSAGE_BRIDGE_DIR", None)
-        with self.assertRaisesRegex(RuntimeError, "COWORK_IMESSAGE_BRIDGE_DIR.*required"):
+        with self.assertRaisesRegex(RuntimeError, "IMESSAGE_BRIDGE_DIR.*required"):
             helper.mint_send_nonce("+14155551234", "hello", "iMessage")
+
+    def test_new_env_var_alone_works(self) -> None:
+        """IMESSAGE_BRIDGE_DIR alone should work."""
+        os.environ.pop("COWORK_IMESSAGE_BRIDGE_DIR", None)
+        os.environ["IMESSAGE_BRIDGE_DIR"] = os.path.realpath(self._tmp.name)
+        nonce = helper.mint_send_nonce("+14155551234", "hello", "iMessage")
+        self.assertTrue(len(nonce) > 0)
+
+    def test_old_env_var_alone_works(self) -> None:
+        """COWORK_IMESSAGE_BRIDGE_DIR alone should still work (one-release alias)."""
+        os.environ.pop("IMESSAGE_BRIDGE_DIR", None)
+        os.environ["COWORK_IMESSAGE_BRIDGE_DIR"] = os.path.realpath(self._tmp.name)
+        nonce = helper.mint_send_nonce("+14155551234", "hello", "iMessage")
+        self.assertTrue(len(nonce) > 0)
+
+    def test_new_env_var_takes_precedence(self) -> None:
+        """When both are set, IMESSAGE_BRIDGE_DIR takes precedence."""
+        real_bridge = Path(os.path.realpath(self._tmp.name))
+        decoy = real_bridge / "decoy"
+        decoy.mkdir(mode=0o700)
+        
+        os.environ["IMESSAGE_BRIDGE_DIR"] = str(real_bridge)
+        os.environ["COWORK_IMESSAGE_BRIDGE_DIR"] = str(decoy)
+        
+        nonce = helper.mint_send_nonce("+14155551234", "hello", "iMessage")
+        nonce_file = real_bridge / "nonces" / f"{nonce}.json"
+        self.assertTrue(nonce_file.exists(), "Nonce should be in IMESSAGE_BRIDGE_DIR path")
+        self.assertEqual(list(decoy.iterdir()), [], "Decoy dir should be untouched")
 
 
 if __name__ == "__main__":
