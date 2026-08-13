@@ -3,6 +3,11 @@
 Releases use semantic versioning for the helper, MCP server, and plugin package.
 The file-bridge protocol has its own major/minor compatibility version.
 
+## 0.1.1 - Unreleased
+
+- Open completed Messages snapshots as immutable, read-only databases so
+  WAL-marked snapshots do not require writable `-wal` or `-shm` sidecars.
+
 ## 0.1.0 - 2026-08-12
 
 - Add a local-only ChatGPT/Codex plugin with a bundled STDIO MCP server and
