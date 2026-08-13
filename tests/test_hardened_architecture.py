@@ -40,6 +40,7 @@ spec.loader.exec_module(module)
 print(module.ALLOWLIST_PATH)
 """
             env = os.environ.copy()
+            env["IMESSAGE_BRIDGE_DIR"] = str(bridge)
             env["COWORK_IMESSAGE_BRIDGE_DIR"] = str(bridge)
             env["COWORK_IMESSAGE_READ_ALLOWLIST"] = ""
             result = subprocess.run(
@@ -143,6 +144,7 @@ class WrapperValidationTests(unittest.TestCase):
             wrapper = root / "wrapper"
             helper_script.write_text(
                 "import os\n"
+                "print(os.environ['IMESSAGE_BRIDGE_DIR'])\n"
                 "print(os.environ['COWORK_IMESSAGE_BRIDGE_DIR'])\n"
                 "print(os.environ['COWORK_IMESSAGE_READ_ALLOWLIST'])\n"
             )
@@ -166,7 +168,7 @@ class WrapperValidationTests(unittest.TestCase):
                     f'-DPYTHON_INTERPRETER="{sys.executable}"',
                     "-o",
                     str(wrapper),
-                    str(REPO_ROOT / "bin" / "cowork_imessage_helper.c"),
+                    str(REPO_ROOT / "bin" / "imessage_helper.c"),
                 ],
                 capture_output=True,
                 text=True,
@@ -179,8 +181,9 @@ class WrapperValidationTests(unittest.TestCase):
             self.assertEqual(
                 healthy.stdout.splitlines(),
                 [
-                    str(root / "bridge"),
-                    str(root / "bridge" / "contacts" / "allowed_chats.txt"),
+                    str(root / "bridge"),  # IMESSAGE_BRIDGE_DIR
+                    str(root / "bridge"),  # COWORK_IMESSAGE_BRIDGE_DIR
+                    str(root / "bridge" / "contacts" / "allowed_chats.txt"),  # COWORK_IMESSAGE_READ_ALLOWLIST
                 ],
             )
 

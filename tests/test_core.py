@@ -119,15 +119,21 @@ class SendGateTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory(prefix="grokbot-nonce-test-")
         self.addCleanup(self._tmp.cleanup)
-        self._old_bridge = os.environ.get("COWORK_IMESSAGE_BRIDGE_DIR")
+        self._old_bridge_new = os.environ.get("IMESSAGE_BRIDGE_DIR")
+        self._old_bridge_old = os.environ.get("COWORK_IMESSAGE_BRIDGE_DIR")
+        os.environ["IMESSAGE_BRIDGE_DIR"] = os.path.realpath(self._tmp.name)
         os.environ["COWORK_IMESSAGE_BRIDGE_DIR"] = os.path.realpath(self._tmp.name)
         self.addCleanup(self._restore_bridge)
 
     def _restore_bridge(self) -> None:
-        if self._old_bridge is None:
+        if self._old_bridge_new is None:
+            os.environ.pop("IMESSAGE_BRIDGE_DIR", None)
+        else:
+            os.environ["IMESSAGE_BRIDGE_DIR"] = self._old_bridge_new
+        if self._old_bridge_old is None:
             os.environ.pop("COWORK_IMESSAGE_BRIDGE_DIR", None)
         else:
-            os.environ["COWORK_IMESSAGE_BRIDGE_DIR"] = self._old_bridge
+            os.environ["COWORK_IMESSAGE_BRIDGE_DIR"] = self._old_bridge_old
 
     def test_nonce_round_trip_and_replay_rejection(self) -> None:
         nonce = helper.mint_send_nonce("+14155551234", "hello", "iMessage")
@@ -195,9 +201,86 @@ class SendGateTests(unittest.TestCase):
         self.assertEqual(list(victim.iterdir()), [])
 
     def test_missing_bridge_dir_env_raises(self) -> None:
-        os.environ.pop("COWORK_IMESSAGE_BRIDGE_DIR", None)
-        with self.assertRaisesRegex(RuntimeError, "COWORK_IMESSAGE_BRIDGE_DIR.*required"):
-            helper.mint_send_nonce("+14155551234", "hello", "iMessage")
+        # Save current values
+        saved_new = os.environ.get("IMESSAGE_BRIDGE_DIR")
+        saved_old = os.environ.get("COWORK_IMESSAGE_BRIDGE_DIR")
+        try:
+            os.environ.pop("IMESSAGE_BRIDGE_DIR", None)
+            os.environ.pop("COWORK_IMESSAGE_BRIDGE_DIR", None)
+            with self.assertRaisesRegex(RuntimeError, "IMESSAGE_BRIDGE_DIR.*required"):
+                helper.mint_send_nonce("+14155551234", "hello", "iMessage")
+        finally:
+            # Restore
+            if saved_new is not None:
+                os.environ["IMESSAGE_BRIDGE_DIR"] = saved_new
+            if saved_old is not None:
+                os.environ["COWORK_IMESSAGE_BRIDGE_DIR"] = saved_old
+
+    def test_new_env_var_alone_works(self) -> None:
+        """IMESSAGE_BRIDGE_DIR alone should work."""
+        # Save current values
+        saved_new = os.environ.get("IMESSAGE_BRIDGE_DIR")
+        saved_old = os.environ.get("COWORK_IMESSAGE_BRIDGE_DIR")
+        try:
+            os.environ.pop("COWORK_IMESSAGE_BRIDGE_DIR", None)
+            os.environ["IMESSAGE_BRIDGE_DIR"] = os.path.realpath(self._tmp.name)
+            nonce = helper.mint_send_nonce("+14155551234", "hello", "iMessage")
+            self.assertTrue(len(nonce) > 0)
+        finally:
+            # Restore
+            if saved_new is not None:
+                os.environ["IMESSAGE_BRIDGE_DIR"] = saved_new
+            else:
+                os.environ.pop("IMESSAGE_BRIDGE_DIR", None)
+            if saved_old is not None:
+                os.environ["COWORK_IMESSAGE_BRIDGE_DIR"] = saved_old
+
+    def test_old_env_var_alone_works(self) -> None:
+        """COWORK_IMESSAGE_BRIDGE_DIR alone should still work (one-release alias)."""
+        # Save current values
+        saved_new = os.environ.get("IMESSAGE_BRIDGE_DIR")
+        saved_old = os.environ.get("COWORK_IMESSAGE_BRIDGE_DIR")
+        try:
+            os.environ.pop("IMESSAGE_BRIDGE_DIR", None)
+            os.environ["COWORK_IMESSAGE_BRIDGE_DIR"] = os.path.realpath(self._tmp.name)
+            nonce = helper.mint_send_nonce("+14155551234", "hello", "iMessage")
+            self.assertTrue(len(nonce) > 0)
+        finally:
+            # Restore
+            if saved_new is not None:
+                os.environ["IMESSAGE_BRIDGE_DIR"] = saved_new
+            if saved_old is not None:
+                os.environ["COWORK_IMESSAGE_BRIDGE_DIR"] = saved_old
+            else:
+                os.environ.pop("COWORK_IMESSAGE_BRIDGE_DIR", None)
+
+    def test_new_env_var_takes_precedence(self) -> None:
+        """When both are set, IMESSAGE_BRIDGE_DIR takes precedence."""
+        # Save current values
+        saved_new = os.environ.get("IMESSAGE_BRIDGE_DIR")
+        saved_old = os.environ.get("COWORK_IMESSAGE_BRIDGE_DIR")
+        try:
+            real_bridge = Path(os.path.realpath(self._tmp.name))
+            decoy = real_bridge / "decoy"
+            decoy.mkdir(mode=0o700)
+            
+            os.environ["IMESSAGE_BRIDGE_DIR"] = str(real_bridge)
+            os.environ["COWORK_IMESSAGE_BRIDGE_DIR"] = str(decoy)
+            
+            nonce = helper.mint_send_nonce("+14155551234", "hello", "iMessage")
+            nonce_file = real_bridge / "nonces" / f"{nonce}.json"
+            self.assertTrue(nonce_file.exists(), "Nonce should be in IMESSAGE_BRIDGE_DIR path")
+            self.assertEqual(list(decoy.iterdir()), [], "Decoy dir should be untouched")
+        finally:
+            # Restore
+            if saved_new is not None:
+                os.environ["IMESSAGE_BRIDGE_DIR"] = saved_new
+            else:
+                os.environ.pop("IMESSAGE_BRIDGE_DIR", None)
+            if saved_old is not None:
+                os.environ["COWORK_IMESSAGE_BRIDGE_DIR"] = saved_old
+            else:
+                os.environ.pop("COWORK_IMESSAGE_BRIDGE_DIR", None)
 
 
 if __name__ == "__main__":

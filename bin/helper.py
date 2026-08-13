@@ -47,7 +47,11 @@ from typing import Any, Iterable
 CODE_ROOT = Path(__file__).resolve().parent.parent
 BRIDGE_ROOT = Path(
     os.path.abspath(
-        os.path.expanduser(os.environ.get("COWORK_IMESSAGE_BRIDGE_DIR", str(CODE_ROOT)))
+        os.path.expanduser(
+            os.environ.get("IMESSAGE_BRIDGE_DIR")
+            or os.environ.get("COWORK_IMESSAGE_BRIDGE_DIR")
+            or str(CODE_ROOT)
+        )
     )
 )
 REQUESTS_DIR = BRIDGE_ROOT / "control" / "requests"
@@ -93,6 +97,7 @@ def _load_sibling(name: str):
 
 # Route send_gate's state to our install tree so a non-default install
 # (helper lives somewhere other than ~/cowork-imessage/) still works.
+os.environ.setdefault("IMESSAGE_BRIDGE_DIR", str(BRIDGE_ROOT))
 os.environ.setdefault("COWORK_IMESSAGE_BRIDGE_DIR", str(BRIDGE_ROOT))
 _send_gate = _load_sibling("send_gate")
 SEND_NONCE_TTL = _send_gate.SEND_NONCE_TTL

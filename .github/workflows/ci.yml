@@ -55,7 +55,7 @@ jobs:
           -DPYTHON_INTERPRETER='"/usr/bin/python3"'
           -DHELPER_DISPLAY_NAME='"chatgpt-codex-imessage-helper"'
           -DHOST_DISPLAY_NAME='"ChatGPT/Codex"'
-          -fsyntax-only bin/cowork_imessage_helper.c
+          -fsyntax-only bin/imessage_helper.c
       - name: Compile native confirmation helper
         run: >-
           clang -Wall -Wextra -Werror -fobjc-arc
