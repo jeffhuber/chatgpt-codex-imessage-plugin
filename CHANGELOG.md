@@ -5,11 +5,18 @@ The file-bridge protocol has its own major/minor compatibility version.
 
 ## Unreleased
 
+## 1.1.0 - 2026-08-12
+
+- Version alignment with sibling ChatGPT/Codex, Claude Cowork, and Grok Bot helpers.
 - Rename wrapper source `bin/cowork_imessage_helper.c` → `bin/imessage_helper.c`.
 - Export `IMESSAGE_BRIDGE_DIR` from wrapper; keep `COWORK_IMESSAGE_BRIDGE_DIR` as a
   one-release alias (Python prefers new name, falls back to old).
 - Refuse the retired `~/cowork-imessage` send-gate default; document three-host
   coexistence.
+- Standard install now leads in README install order; hardened is optional defense-in-depth.
+- Fail-closed send-gate with native confirmation dialog; Cancel is the keyboard default.
+- Document and screenshot the native send-confirmation dialog (shared dialog family with Grok/Claude helpers).
+- Independence by design: three separate helpers coexist on the same Mac, do not share helpers.
 
 ## 0.1.1 - 2026-08-12
 

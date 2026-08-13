@@ -32,7 +32,7 @@ jobs:
       - run: python -m unittest discover -s tests -v
       - run: bash -n install.sh install-hardened.sh install-plugin.sh uninstall.sh uninstall-hardened.sh scripts/run-mcp-server.sh
       - run: shellcheck install.sh install-hardened.sh install-plugin.sh uninstall.sh uninstall-hardened.sh scripts/run-mcp-server.sh
-      - run: python tools/check_version.py v0.1.1
+      - run: python tools/check_version.py v1.1.0
   macos:
     runs-on: macos-latest
     steps:
