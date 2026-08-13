@@ -95,10 +95,11 @@ def _load_sibling(name: str):
     return mod
 
 
-# Route send_gate's state to our install tree. Both the old and new
-# environment variables are set for one-release compatibility.
-os.environ.setdefault("IMESSAGE_BRIDGE_DIR", str(BRIDGE_ROOT))
-os.environ.setdefault("COWORK_IMESSAGE_BRIDGE_DIR", str(BRIDGE_ROOT))
+# Route send_gate's state to the bridge so the send gate knows where to write
+# nonces. Preserve explicit values, including an empty value that must fail
+# closed, and retain the legacy name as a compatibility input.
+if "IMESSAGE_BRIDGE_DIR" not in os.environ and "COWORK_IMESSAGE_BRIDGE_DIR" not in os.environ:
+    os.environ["IMESSAGE_BRIDGE_DIR"] = str(BRIDGE_ROOT)
 _send_gate = _load_sibling("send_gate")
 SEND_NONCE_TTL = _send_gate.SEND_NONCE_TTL
 SendGateError = _send_gate.SendGateError

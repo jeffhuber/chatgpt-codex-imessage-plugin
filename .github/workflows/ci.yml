@@ -28,8 +28,9 @@ jobs:
           bin/helper.py bin/send_gate.py
           plugin_server/bridge.py plugin_server/server.py
           tools/doctor.py tools/check_version.py tools/configure_allowlist.py
-          tools/install_plugin_manifest.py
+          tools/check_shared_core.py tools/install_plugin_manifest.py
       - run: python -m unittest discover -s tests -v
+      - run: python tools/check_shared_core.py
       - run: bash -n install.sh install-hardened.sh install-plugin.sh uninstall.sh uninstall-hardened.sh scripts/run-mcp-server.sh
       - run: shellcheck install.sh install-hardened.sh install-plugin.sh uninstall.sh uninstall-hardened.sh scripts/run-mcp-server.sh
       - run: python tools/check_version.py v1.1.0
