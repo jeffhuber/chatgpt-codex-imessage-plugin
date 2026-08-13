@@ -55,7 +55,16 @@ git clone https://github.com/jeffhuber/chatgpt-codex-imessage-plugin.git
 cd chatgpt-codex-imessage-plugin
 ```
 
-### Standard Install
+### Choose an Installation Mode
+
+Choose deliberately based on the local threat model:
+
+| Mode | Best fit | Security and operational tradeoff |
+|---|---|---|
+| **Standard** | **Default.** Personal Mac, getting started, and everyday use. | No `sudo`; user-writable code does not resist a compromised same-user process. |
+| **Hardened** | You run other unsandboxed automation as your user, or want a root-owned default-deny allowlist. | Root-owned validated code; requires `sudo` and explicit allowlist maintenance. |
+
+**Standard per-user install:**
 
 ```bash
 ./install.sh
@@ -67,7 +76,7 @@ no administrator access, but another unsandboxed process running as your user
 could replace that code. Its default blocklist protects against accidental
 disclosure, not a compromised same-user process.
 
-### Hardened Install (Optional Defense-in-Depth)
+**Hardened install:**
 
 ```bash
 ./install-hardened.sh
@@ -209,9 +218,11 @@ There is deliberately no arbitrary SQL, filesystem, AppleScript, or generic
 
 ## Coexistence
 
-These are **three independent helpers** maintained as separate implementations by
-design. They are not meant to be unified or share components. Each has its own
-isolated runtime state and identity.
+These are three independently deployed helpers with a security-critical source
+core kept in parity. Each installed host has its own isolated runtime state and
+authorization identity; those boundaries must not be unified. The shared source
+contract is recorded in `shared-core.json` and enforced by CI. See
+[Shared Core Maintenance](docs/SHARED_CORE.md).
 
 - **Grok Bot** — LaunchAgent `com.jeffhuber.grokbot-imessage`, wrapper `grokbot-imessage-helper` — https://github.com/jeffhuber/grokbot-imessage-skill
 - **Claude Cowork** — LaunchAgent `com.jeffhuber.claudecowork-imessage`, wrapper `claude-cowork-imessage-helper` — https://github.com/jeffhuber/claudecowork-imessage-skill

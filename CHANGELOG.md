@@ -5,6 +5,12 @@ The file-bridge protocol has its own major/minor compatibility version.
 
 ## Unreleased
 
+- Preserve an explicitly empty bridge environment variable so send-gate setup
+  fails closed instead of silently selecting the default bridge.
+- Clarify standard and hardened installation as an explicit threat-model choice.
+- Add a deterministic shared-core manifest and CI check for security parity
+  with the Claude Cowork and Grok Bot sibling repositories.
+
 ## 1.1.0 - 2026-08-12
 
 - Version alignment with sibling ChatGPT/Codex, Claude Cowork, and Grok Bot helpers.

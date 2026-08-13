@@ -4,13 +4,15 @@ import json
 import os
 import stat
 import struct
+import subprocess
+import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from tests._helper_loader import helper
+from tests._helper_loader import REPO_ROOT, helper
 
 
 def make_attributed_blob(body: bytes) -> bytes:
@@ -215,6 +217,50 @@ class SendGateTests(unittest.TestCase):
                 os.environ["IMESSAGE_BRIDGE_DIR"] = saved_new
             if saved_old is not None:
                 os.environ["COWORK_IMESSAGE_BRIDGE_DIR"] = saved_old
+
+    def test_empty_bridge_dir_is_not_replaced_during_helper_import(self) -> None:
+        script = """
+import importlib.util
+import os
+import pathlib
+import sys
+
+path = pathlib.Path("bin/helper.py").resolve()
+spec = importlib.util.spec_from_file_location("isolated_imessage_helper", path)
+if spec is None or spec.loader is None:
+    raise RuntimeError("could not create helper module spec")
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+try:
+    spec.loader.exec_module(module)
+except RuntimeError as exc:
+    assert "IMESSAGE_BRIDGE_DIR" in str(exc) and "required" in str(exc)
+else:
+    raise AssertionError("helper import must reject an explicitly empty bridge directory")
+
+assert os.environ["IMESSAGE_BRIDGE_DIR"] == ""
+assert "COWORK_IMESSAGE_BRIDGE_DIR" not in os.environ
+"""
+        env = os.environ.copy()
+        env["IMESSAGE_BRIDGE_DIR"] = ""
+        env.pop("COWORK_IMESSAGE_BRIDGE_DIR", None)
+        completed = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=REPO_ROOT,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+
+    def test_empty_new_bridge_dir_does_not_fall_back_to_old_name(self) -> None:
+        os.environ["IMESSAGE_BRIDGE_DIR"] = ""
+        os.environ["COWORK_IMESSAGE_BRIDGE_DIR"] = self._tmp.name
+        with self.assertRaisesRegex(RuntimeError, "IMESSAGE_BRIDGE_DIR.*required"):
+            helper._send_gate._bridge_dir()
+        with self.assertRaisesRegex(RuntimeError, "IMESSAGE_BRIDGE_DIR.*required"):
+            helper.mint_send_nonce("+14155551234", "hello", "iMessage")
 
     def test_new_env_var_alone_works(self) -> None:
         """IMESSAGE_BRIDGE_DIR alone should work."""
