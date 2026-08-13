@@ -1,6 +1,6 @@
 ---
 name: chatgpt-codex-imessage
-version: 1.1.0
+version: 1.2.0
 description: Read, search, triage, and send iMessages through the local macOS iMessage MCP helper. Use for message reviews, history searches, contact lookup, response-time analysis, and user-approved plain-text sends. Use only in local ChatGPT Work or Codex sessions on a Mac where the helper is installed.
 ---
 
