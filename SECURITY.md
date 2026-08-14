@@ -20,9 +20,9 @@ install the helper.
 
 Both paths go through a single on-device helper process: a Python
 script (`helper.py`) launched by a locally signed C wrapper via a
-user-scoped `launchd` LaunchAgent. The C wrapper exists solely to give
-the helper a stable `CDHash`, which is what macOS TCC uses to identify
-the process holding Full Disk Access.
+user-scoped `launchd` LaunchAgent. The C wrapper gives the helper a stable
+`CDHash`, validates the executable components and policy configuration, and
+sets a minimal environment before Python starts.
 
 ## Permissions required, and what each one actually grants
 
@@ -40,9 +40,10 @@ to read:
   `Library/Application Support/*`).
 - Any user file that isn't itself TCC-gated.
 
-The plugin *code* only reads `chat.db`. But a bug or compromise in
-the helper becomes a full-user-file-read primitive, not just a
-Messages leak. Treat that as the blast radius.
+The read path targets `chat.db` plus local Contacts data used for name
+resolution. But a bug or compromise in the helper becomes a
+full-user-file-read primitive, not just a Messages leak. Treat that as the
+blast radius.
 
 ### The CDHash pins the wrapper, not the Python
 
@@ -52,7 +53,7 @@ native confirmation helper must be regular files, have the expected owner, and
 not be group/world writable. It rejects symlinks. The confirmation helper must
 also be executable.
 
-The **standard installer** keeps code in the user-owned source clone. A same-user
+The **standard installer** keeps code in the user-owned live folder or source clone. A same-user
 process can replace a file with another file that still has the expected user
 owner and permissions, so this mode remains vulnerable to code replacement. A
 tampered helper could:
@@ -289,10 +290,9 @@ You can verify what's actually on your disk:
 - All source is in this repository. Read `bin/helper.py` and
   `bin/send_gate.py`; they run inside the FDA-granted Python process. The
   native confirmation source is `bin/confirm_imessage_send.m`.
-- The C wrapper source is in `bin/imessage_helper.c`. It does
-  approximately nothing — it exists to stabilize the CDHash. You can
-  rebuild it yourself; the README documents the one-line `clang` command
-  used by `install.sh`.
+- The C wrapper source is `bin/imessage_helper.c`. It stabilizes the CDHash,
+  validates every executable component and policy path, sets a minimal
+  environment, and then executes Python.
 - Verify the repository contents match a tagged GitHub release. Release source
   archives include a `SHA256SUMS` file, and the source is small enough to diff
   against a local clone.
@@ -306,8 +306,8 @@ You can verify what's actually on your disk:
 
 To fully remove the helper's access:
 
-1. Run the matching `./uninstall.sh` or `./uninstall-hardened.sh` from the
-   source clone.
+1. Run the matching `./uninstall.sh` or `./uninstall-hardened.sh` from the live
+   folder or source clone you installed.
 2. Review and delete `~/Library/Application Support/ChatGPTCodexIMessage`.
 3. System Settings → Privacy & Security → Full Disk Access → remove
    `chatgpt-codex-imessage-helper`.

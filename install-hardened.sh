@@ -84,14 +84,15 @@ fi
 if ! HELPER_PYTHON_PATH="$(find_helper_python "$ORIGINAL_PATH" 1)"; then
     echo "Error: hardened mode requires a trusted Python 3.9 or newer" >&2
     echo "with dir_fd support for the FDA helper. If IMESSAGE_HELPER_PYTHON" >&2
-    echo "is set, its file and parents must be root-owned and protected." >&2
+    echo "is set, it must be an absolute path whose file and parents are" >&2
+    echo "root-owned and protected." >&2
     exit 1
 fi
 MCP_PYTHON_PATH=""
 if [[ "$INSTALL_OPENAI_PLUGIN" == "1" ]]; then
     if ! MCP_PYTHON_PATH="$(find_mcp_python "$ORIGINAL_PATH")"; then
         echo "Error: Python 3.10 or newer is required for the MCP runtime." >&2
-        echo "If IMESSAGE_PYTHON is set, it must name a supported interpreter." >&2
+        echo "If IMESSAGE_PYTHON is set, it must be an absolute path to a supported interpreter." >&2
         exit 1
     fi
 fi

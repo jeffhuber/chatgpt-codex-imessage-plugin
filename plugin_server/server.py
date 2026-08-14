@@ -13,7 +13,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from plugin_server.bridge import BridgeClient, BridgeError  # noqa: E402
 
-SERVER_VERSION = "1.2.1"
+SERVER_VERSION = "1.2.2"
 SUPPORTED_PROTOCOL_MAJOR = "1"
 client = BridgeClient()
 _compatible_checked = False

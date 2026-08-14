@@ -5,13 +5,14 @@ The file-bridge protocol has its own major/minor compatibility version.
 
 ## Unreleased
 
+## 1.2.2 - 2026-08-14
+
 - Harden hardened-install Python selection by validating interpreter ownership
   and path permissions before executing a compatibility probe.
 - Report shell-only `chat.db` access accurately in `doctor.py`; the wrapper's Full
   Disk Access remains verified by the smoke test.
 - Pin setup-python by commit, prevent release checkout credential persistence,
   and add weekly Python dependency monitoring.
-
 - Install from a non-git live folder (e.g. `~/imessage-bridge-chatgpt`)
   defaults the bridge to that same folder, matching the Grok/Claude pattern.
   Wrapper, control queue, contacts, and MCP venv stay together.
@@ -23,6 +24,10 @@ The file-bridge protocol has its own major/minor compatibility version.
   the MCP launcher.
 - Installing from a git checkout warns when `~/imessage-bridge-chatgpt` exists
   with a live helper.
+- Add a supported-interpreter test entrypoint and announcement-ready install,
+  upgrade, privacy, release-integrity, and host-support documentation.
+- Require a GitHub-verified signed tag and draft-first publication for immutable
+  release assets.
 
 ## 1.2.1 - 2026-08-13
 

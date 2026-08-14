@@ -7,6 +7,9 @@ Mac.
 This is an independent open-source project by Jeff Huber. It is not made,
 endorsed, or supported by Apple or OpenAI.
 
+**Security:** Report vulnerabilities privately as described in
+[SECURITY.md](./SECURITY.md).
+
 ## Support Boundary
 
 | Surface | Support | Why |
@@ -15,6 +18,10 @@ endorsed, or supported by Apple or OpenAI.
 | Codex in the ChatGPT macOS app | Supported | Codex loads the same local plugin and MCP configuration. |
 | Codex CLI or IDE extension on the same Mac | Expected | Local Codex clients share MCP configuration, but the desktop app is the primary tested surface. |
 | ChatGPT web, hosted Chat, cloud Work, mobile, or remote Codex | Not supported | Cloud sessions cannot reach a private process or Messages database on your Mac. |
+
+Local Work, Codex, and plugin availability can vary by ChatGPT plan, workspace
+policy, role, and staged rollout. See [OpenAI's plugin documentation](https://help.openai.com/en/articles/20001256-plugins-in-codex)
+for the current product requirements.
 
 There is no cloud relay, hosted MCP endpoint, account service, or telemetry.
 The helper and MCP server make no outbound network requests. However, message
@@ -66,7 +73,16 @@ The helper protocol is independently versioned and currently reports `1.1`.
 
 ## Install
 
-Clone the repository:
+For a reproducible install, download every asset from the
+[latest release](../../releases/latest), then verify them:
+
+```bash
+shasum -a 256 -c SHA256SUMS
+```
+
+Unpack the verified archive and enter its directory. Release archives contain
+source only; the macOS binaries are compiled and signed locally. To contribute
+or follow `main` instead, clone the repository:
 
 ```bash
 git clone https://github.com/jeffhuber/chatgpt-codex-imessage-plugin.git
@@ -169,7 +185,7 @@ After installation, grant **Full Disk Access** to the exact wrapper path printed
 by the installer:
 
 - Hardened: `/Library/Application Support/ChatGPTCodexIMessage/users/<uid>/libexec/bin/chatgpt-codex-imessage-helper`
-- Standard: `<clone>/bin/chatgpt-codex-imessage-helper`
+- Standard: `<live folder or clone>/bin/chatgpt-codex-imessage-helper`
 
 Open **System Settings > Privacy & Security > Full Disk Access**, use the `+`
 button, press Cmd-Shift-G, and enter the path.
@@ -297,6 +313,19 @@ content intentionally returned to the active model conversation.
 Messages are two-sided. Other participants have not necessarily consented to
 LLM processing. Allowlist only the conversations appropriate for your use.
 
+Standard installs use `contacts/read_policy.txt` (`blocklist` by default).
+Add one phone number, email, or group ID per line to
+`contacts/blocked_chats.txt`; blocked threads are removed before response JSON
+is written. You may set the policy to `allowlist` and populate
+`contacts/allowed_chats.txt`, but both files remain user-editable in standard
+mode. The blocklist always takes precedence.
+
+The helper masks verification codes in recognized contexts, card-like digit
+runs, and US SSNs. This regex redaction is best-effort, not a DLP boundary:
+context-free codes and PINs, API keys, bank or routing numbers, addresses,
+dates of birth, and alternative separators can pass through. Treat the
+blocklist or hardened allowlist as the primary disclosure boundary.
+
 Read [SECURITY.md](./SECURITY.md) before installing. Protocol details are in
 [docs/PROTOCOL.md](./docs/PROTOCOL.md), and the post-install checklist is in
 [docs/SMOKE_TEST.md](./docs/SMOKE_TEST.md). Release notes and version history
@@ -320,19 +349,34 @@ the smoke test as the authoritative check of the wrapper's Full Disk Access.
 Developer checks:
 
 ```bash
-python3 -m pip install -r requirements-mcp.txt
-python3 -m unittest discover -s tests -v
-python3 -m py_compile bin/*.py plugin_server/*.py tools/*.py
+source tools/select_python.sh
+MCP_PYTHON="$(find_mcp_python "$PATH")"
+"$MCP_PYTHON" -m venv .venv
+.venv/bin/python -m pip install -r requirements-mcp.txt
+IMESSAGE_TEST_PYTHON="$PWD/.venv/bin/python" ./tools/test.sh
 bash -n install.sh install-hardened.sh install-plugin.sh \
   uninstall.sh uninstall-hardened.sh scripts/run-mcp-server.sh \
-  tools/bridge_paths.sh
+  tools/bridge_paths.sh tools/select_python.sh tools/test.sh
 shellcheck install.sh install-hardened.sh install-plugin.sh \
   uninstall.sh uninstall-hardened.sh scripts/run-mcp-server.sh \
-  tools/bridge_paths.sh
+  tools/bridge_paths.sh tools/select_python.sh tools/test.sh
 python3 /path/to/plugin-creator/scripts/validate_plugin.py .
 ```
 
-CI also compiles the C wrapper and native AppKit confirmation helper on macOS.
+`tools/test.sh` validates and prints the selected interpreter before any test
+runs. The repository launcher is intentionally installed-plugin-only; run
+`./install-plugin.sh` before testing it through ChatGPT. CI also compiles the C
+wrapper and native AppKit confirmation helper on macOS.
+
+## Upgrading
+
+Download and verify the new release assets, review `CHANGELOG.md`, then copy the
+source over the same live folder or update the same clone. Rerun the same
+installer mode you previously used; this refreshes the helper, local plugin,
+MCP environment, and LaunchAgent. Restart ChatGPT, run the installer-printed
+doctor command, and complete [the smoke test](docs/SMOKE_TEST.md). Regrant Full
+Disk Access only if macOS no longer recognizes the rebuilt wrapper; the
+installer prints its exact path.
 
 ## Uninstall
 

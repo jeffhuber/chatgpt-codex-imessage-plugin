@@ -119,14 +119,14 @@ done
 
 if ! HELPER_PYTHON_PATH="$(find_helper_python "$PATH")"; then
     red "Python 3.9 or newer with dir_fd support is required for the helper."
-    red "If IMESSAGE_HELPER_PYTHON is set, it must name a supported interpreter."
+    red "If IMESSAGE_HELPER_PYTHON is set, it must be an absolute path to a supported interpreter."
     exit 1
 fi
 MCP_PYTHON_PATH=""
 if [[ "$INSTALL_OPENAI_PLUGIN" == "1" ]]; then
     if ! MCP_PYTHON_PATH="$(find_mcp_python "$PATH")"; then
         red "Python 3.10 or newer is required for the MCP runtime."
-        red "If IMESSAGE_PYTHON is set, it must name a supported interpreter."
+        red "If IMESSAGE_PYTHON is set, it must be an absolute path to a supported interpreter."
         exit 1
     fi
 fi
