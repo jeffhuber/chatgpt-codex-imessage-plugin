@@ -613,7 +613,7 @@ class BridgePathResolutionTests(unittest.TestCase):
     def test_non_git_tree_defaults_to_install_root(self) -> None:
         """When running from a non-git folder, BRIDGE_ROOT should default to INSTALL_ROOT."""
         with tempfile.TemporaryDirectory(prefix="chatgpt-nongit-test-") as td:
-            install_root = Path(td)
+            install_root = Path(td).resolve()  # Resolve to canonical path
             install_sh = install_root / "install.sh"
             install_sh.write_text((REPO_ROOT / "install.sh").read_text())
 
@@ -648,7 +648,8 @@ class BridgePathResolutionTests(unittest.TestCase):
                 env={**os.environ, "HOME": str(Path.home())},
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(result.stdout.strip(), str(install_root))
+            # Resolve both paths to handle /var vs /private/var on macOS
+            self.assertEqual(Path(result.stdout.strip()).resolve(), install_root)
 
     def test_git_tree_defaults_to_application_support(self) -> None:
         """When running from a git checkout, BRIDGE_ROOT should default to Application Support."""
