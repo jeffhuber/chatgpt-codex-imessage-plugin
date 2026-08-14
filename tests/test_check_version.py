@@ -22,6 +22,12 @@ class ChangelogVersionTests(unittest.TestCase):
             (True, ""),
         )
 
+    def test_crlf_release_heading_is_valid(self) -> None:
+        self.assertEqual(
+            self.check("# Changelog\r\n\r\n## 1.2.0 - 2020-01-02\r\n"),
+            (True, ""),
+        )
+
     def test_duplicate_version_headings_are_rejected(self) -> None:
         valid, error = self.check(
             "# Changelog\n\n"
@@ -36,6 +42,13 @@ class ChangelogVersionTests(unittest.TestCase):
         self.assertFalse(valid)
         self.assertIn("invalid date", error)
 
+    def test_trailing_date_text_is_rejected(self) -> None:
+        valid, error = self.check(
+            "# Changelog\n\n## 1.2.0 - 2020-01-02 released\n"
+        )
+        self.assertFalse(valid)
+        self.assertIn("invalid date", error)
+
     def test_heading_cannot_span_lines(self) -> None:
         valid, error = self.check(
             "# Changelog\n\n## 1.2.0\n  - 2020-01-02\n"
@@ -47,6 +60,24 @@ class ChangelogVersionTests(unittest.TestCase):
         valid, error = self.check("# Changelog\n\n## 1.1.0 - 2020-01-02\n")
         self.assertFalse(valid)
         self.assertIn("found 0", error)
+
+    def test_skill_version_is_read_only_from_frontmatter(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="chatgpt-skill-version-") as td:
+            skill = Path(td) / "SKILL.md"
+            skill.write_text(
+                "---\nname: example\nversion: 1.2.0\n---\n\nversion: 9.9.9\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(check_version.frontmatter_version(skill), "1.2.0")
+
+    def test_indented_separator_does_not_close_frontmatter(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="chatgpt-skill-version-") as td:
+            skill = Path(td) / "SKILL.md"
+            skill.write_text(
+                "---\nname: example\n  ---\nversion: 1.2.0\n---\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(check_version.frontmatter_version(skill), "1.2.0")
 
 
 if __name__ == "__main__":

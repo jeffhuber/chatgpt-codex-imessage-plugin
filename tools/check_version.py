@@ -48,14 +48,31 @@ def plugin_version() -> str:
     return version
 
 
+def frontmatter_version(path: Path) -> str:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0] != "---":
+        raise RuntimeError(f"YAML frontmatter not found in {path}")
+    try:
+        end = next(
+            index
+            for index, line in enumerate(lines[1:], 1)
+            if line == "---"
+        )
+    except StopIteration as error:
+        raise RuntimeError(f"YAML frontmatter is not closed in {path}") from error
+    matches = re.findall(
+        r"^version:[ \t]*([^ \t\r\n]+)[ \t]*$",
+        "\n".join(lines[1:end]),
+        re.MULTILINE,
+    )
+    if len(matches) != 1:
+        raise RuntimeError(f"expected one frontmatter version in {path}")
+    return matches[0]
+
+
 def skill_version() -> str:
-    """Extract version from SKILL.md frontmatter."""
     skill_path = REPO_ROOT / "skills" / "chatgpt-codex-imessage" / "SKILL.md"
-    content = skill_path.read_text(encoding="utf-8")
-    match = re.search(r"^version:\s*(.+)$", content, re.MULTILINE)
-    if not match:
-        raise RuntimeError("version not found in SKILL.md frontmatter")
-    return match.group(1).strip()
+    return frontmatter_version(skill_path)
 
 
 def shared_core_version() -> str:
