@@ -5,6 +5,18 @@ The file-bridge protocol has its own major/minor compatibility version.
 
 ## Unreleased
 
+- Install from a non-git live folder (e.g. `~/imessage-bridge-chatgpt`)
+  defaults the bridge to that same folder, matching the Grok/Claude pattern.
+  Wrapper, control queue, contacts, and MCP venv stay together.
+- `install-plugin.sh` writes `bridge.env` so the MCP launcher can find the
+  correct bridge without hardcoded paths.
+- `scripts/run-mcp-server.sh` reads from fail-closed
+  `CHATGPT_CODEX_IMESSAGE_BRIDGE`, then `bridge.env`, then Application Support.
+- Empty `CHATGPT_CODEX_IMESSAGE_BRIDGE` now fails closed in all installers and
+  the MCP launcher.
+- Installing from a git checkout warns when `~/imessage-bridge-chatgpt` exists
+  with a live helper.
+
 ## 1.2.1 - 2026-08-13
 
 - Select the FDA helper and user-level MCP Python runtimes independently,

@@ -20,7 +20,23 @@ PRODUCT_ROOT="/Library/Application Support/ChatGPTCodexIMessage"
 USER_ROOT="$PRODUCT_ROOT/users/$UID"
 CODE_ROOT="$USER_ROOT/libexec"
 CONFIG_ROOT="$USER_ROOT/config"
-BRIDGE_ROOT="${CHATGPT_CODEX_IMESSAGE_BRIDGE:-$HOME/Library/Application Support/ChatGPTCodexIMessage}"
+
+# Resolve user bridge root with fail-closed env override:
+# Hardened mode keeps code at CODE_ROOT (root-owned system path)
+# but the user bridge follows the same env/fail-closed rules.
+# If CHATGPT_CODEX_IMESSAGE_BRIDGE is set (non-empty), use it (fail closed on empty)
+# Else: Application Support default
+if [[ -n "${CHATGPT_CODEX_IMESSAGE_BRIDGE+x}" ]]; then
+    if [[ -z "$CHATGPT_CODEX_IMESSAGE_BRIDGE" ]]; then
+        echo "Error: CHATGPT_CODEX_IMESSAGE_BRIDGE is set but empty; refusing to continue." >&2
+        echo "Either unset it or provide a non-empty absolute path." >&2
+        exit 1
+    fi
+    BRIDGE_ROOT="$CHATGPT_CODEX_IMESSAGE_BRIDGE"
+else
+    BRIDGE_ROOT="$HOME/Library/Application Support/ChatGPTCodexIMessage"
+fi
+
 PLIST_TEMPLATE="$SOURCE_ROOT/com.jeffhuber.chatgpt-codex-imessage.plist.template"
 PLIST_DEST="$HOME/Library/LaunchAgents/com.jeffhuber.chatgpt-codex-imessage.plist"
 LABEL="com.jeffhuber.chatgpt-codex-imessage"

@@ -84,6 +84,30 @@ Choose deliberately based on the local threat model:
 
 **Standard per-user install:**
 
+You can install in two ways: directly from the git checkout (traditional), or by
+copying to a dedicated live folder (recommended for production use alongside
+sibling helpers like Grok Bot or Claude Cowork).
+
+**Option 1: Live install (recommended for coexistence)**
+
+Copy the repository to `~/imessage-bridge-chatgpt` and run the installer there:
+
+```bash
+rsync -a --exclude=.git chatgpt-codex-imessage-plugin/ ~/imessage-bridge-chatgpt/
+cd ~/imessage-bridge-chatgpt
+./install.sh
+```
+
+The installer detects that it's not running from a git checkout and keeps the
+wrapper, control queue, contacts, and MCP virtual environment together in
+`~/imessage-bridge-chatgpt`. This matches the Grok Bot and Claude Cowork install
+pattern. The git checkout at `~/src/chatgpt-codex-imessage-plugin` remains your
+source workspace; updates are applied by copying changed files to the live
+folder and re-running `./install.sh` there.
+
+**Option 2: Git checkout install**
+
+```bash
 ```bash
 ./install.sh
 ```
@@ -93,6 +117,10 @@ runtime state in `~/Library/Application Support/ChatGPTCodexIMessage`. It needs
 no administrator access, but another unsandboxed process running as your user
 could replace that code. Its default blocklist protects against accidental
 disclosure, not a compromised same-user process.
+
+You can override the bridge location with the `CHATGPT_CODEX_IMESSAGE_BRIDGE`
+environment variable if set to a non-empty absolute path. An explicitly empty
+value fails closed.
 
 **Hardened install:**
 

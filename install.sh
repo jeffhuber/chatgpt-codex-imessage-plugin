@@ -29,7 +29,31 @@ fi
 
 INSTALL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 BIN_DIR="$INSTALL_ROOT/bin"
-BRIDGE_ROOT="${CHATGPT_CODEX_IMESSAGE_BRIDGE:-$HOME/Library/Application Support/ChatGPTCodexIMessage}"
+
+# Resolve bridge root with git-aware defaults:
+# 1. If CHATGPT_CODEX_IMESSAGE_BRIDGE is set (non-empty), use it (fail closed on empty)
+# 2. Else if INSTALL_ROOT is not a git work tree (no .git), default to INSTALL_ROOT (live copy)
+# 3. Else (git checkout): use Application Support default
+if [[ -n "${CHATGPT_CODEX_IMESSAGE_BRIDGE+x}" ]]; then
+    if [[ -z "$CHATGPT_CODEX_IMESSAGE_BRIDGE" ]]; then
+        red "CHATGPT_CODEX_IMESSAGE_BRIDGE is set but empty; refusing to continue."
+        red "Either unset it or provide a non-empty absolute path."
+        exit 1
+    fi
+    BRIDGE_ROOT="$CHATGPT_CODEX_IMESSAGE_BRIDGE"
+elif [[ ! -d "$INSTALL_ROOT/.git" ]]; then
+    BRIDGE_ROOT="$INSTALL_ROOT"
+else
+    BRIDGE_ROOT="$HOME/Library/Application Support/ChatGPTCodexIMessage"
+    # Warn if a live install exists
+    LIVE_INSTALL="$HOME/imessage-bridge-chatgpt"
+    if [[ -x "$LIVE_INSTALL/bin/chatgpt-codex-imessage-helper" ]]; then
+        yellow "Warning: detected live install at $LIVE_INSTALL"
+        yellow "Running from a git checkout will use Application Support."
+        yellow "To update the live install, run ./install.sh from $LIVE_INSTALL instead."
+    fi
+fi
+
 CONTROL_DIR="$BRIDGE_ROOT/control"
 CONTACTS_DIR="$BRIDGE_ROOT/contacts"
 HELPER_PY="$BIN_DIR/helper.py"

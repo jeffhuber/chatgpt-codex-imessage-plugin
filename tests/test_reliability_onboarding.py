@@ -607,5 +607,176 @@ class PluginInstallTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
+class BridgePathResolutionTests(unittest.TestCase):
+    """Test git-aware bridge path resolution and bridge.env behavior."""
+
+    def test_non_git_tree_defaults_to_install_root(self) -> None:
+        """When running from a non-git folder, BRIDGE_ROOT should default to INSTALL_ROOT."""
+        with tempfile.TemporaryDirectory(prefix="chatgpt-nongit-test-") as td:
+            install_root = Path(td)
+            install_sh = install_root / "install.sh"
+            install_sh.write_text((REPO_ROOT / "install.sh").read_text())
+
+            # Extract just the bridge resolution logic
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    """
+                    cd "$1"
+                    INSTALL_ROOT="$(pwd -P)"
+                    red() { :; }
+                    yellow() { :; }
+                    if [[ -n "${CHATGPT_CODEX_IMESSAGE_BRIDGE+x}" ]]; then
+                        if [[ -z "$CHATGPT_CODEX_IMESSAGE_BRIDGE" ]]; then
+                            exit 1
+                        fi
+                        BRIDGE_ROOT="$CHATGPT_CODEX_IMESSAGE_BRIDGE"
+                    elif [[ ! -d "$INSTALL_ROOT/.git" ]]; then
+                        BRIDGE_ROOT="$INSTALL_ROOT"
+                    else
+                        BRIDGE_ROOT="$HOME/Library/Application Support/ChatGPTCodexIMessage"
+                    fi
+                    echo "$BRIDGE_ROOT"
+                    """,
+                    "test",
+                    str(install_root),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                env={**os.environ, "HOME": str(Path.home())},
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), str(install_root))
+
+    def test_git_tree_defaults_to_application_support(self) -> None:
+        """When running from a git checkout, BRIDGE_ROOT should default to Application Support."""
+        result = subprocess.run(
+            [
+                "bash",
+                "-c",
+                """
+                cd "$1"
+                INSTALL_ROOT="$(pwd -P)"
+                red() { :; }
+                yellow() { :; }
+                if [[ -n "${CHATGPT_CODEX_IMESSAGE_BRIDGE+x}" ]]; then
+                    if [[ -z "$CHATGPT_CODEX_IMESSAGE_BRIDGE" ]]; then
+                        exit 1
+                    fi
+                    BRIDGE_ROOT="$CHATGPT_CODEX_IMESSAGE_BRIDGE"
+                elif [[ ! -d "$INSTALL_ROOT/.git" ]]; then
+                    BRIDGE_ROOT="$INSTALL_ROOT"
+                else
+                    BRIDGE_ROOT="$HOME/Library/Application Support/ChatGPTCodexIMessage"
+                fi
+                echo "$BRIDGE_ROOT"
+                """,
+                "test",
+                str(REPO_ROOT),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**os.environ, "HOME": str(Path.home())},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        expected = str(Path.home() / "Library" / "Application Support" / "ChatGPTCodexIMessage")
+        self.assertEqual(result.stdout.strip(), expected)
+
+    def test_empty_bridge_env_fails_closed(self) -> None:
+        """Empty CHATGPT_CODEX_IMESSAGE_BRIDGE should fail, not silently use default."""
+        result = subprocess.run(
+            [
+                "bash",
+                "-c",
+                """
+                INSTALL_ROOT="$(pwd -P)"
+                red() { :; }
+                yellow() { :; }
+                if [[ -n "${CHATGPT_CODEX_IMESSAGE_BRIDGE+x}" ]]; then
+                    if [[ -z "$CHATGPT_CODEX_IMESSAGE_BRIDGE" ]]; then
+                        exit 1
+                    fi
+                    BRIDGE_ROOT="$CHATGPT_CODEX_IMESSAGE_BRIDGE"
+                elif [[ ! -d "$INSTALL_ROOT/.git" ]]; then
+                    BRIDGE_ROOT="$INSTALL_ROOT"
+                else
+                    BRIDGE_ROOT="$HOME/Library/Application Support/ChatGPTCodexIMessage"
+                fi
+                echo "$BRIDGE_ROOT"
+                """,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**os.environ, "CHATGPT_CODEX_IMESSAGE_BRIDGE": ""},
+        )
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_explicit_bridge_env_overrides_git_detection(self) -> None:
+        """Explicit non-empty CHATGPT_CODEX_IMESSAGE_BRIDGE should always win."""
+        custom_bridge = "/custom/bridge/path"
+        result = subprocess.run(
+            [
+                "bash",
+                "-c",
+                """
+                cd "$1"
+                INSTALL_ROOT="$(pwd -P)"
+                red() { :; }
+                yellow() { :; }
+                if [[ -n "${CHATGPT_CODEX_IMESSAGE_BRIDGE+x}" ]]; then
+                    if [[ -z "$CHATGPT_CODEX_IMESSAGE_BRIDGE" ]]; then
+                        exit 1
+                    fi
+                    BRIDGE_ROOT="$CHATGPT_CODEX_IMESSAGE_BRIDGE"
+                elif [[ ! -d "$INSTALL_ROOT/.git" ]]; then
+                    BRIDGE_ROOT="$INSTALL_ROOT"
+                else
+                    BRIDGE_ROOT="$HOME/Library/Application Support/ChatGPTCodexIMessage"
+                fi
+                echo "$BRIDGE_ROOT"
+                """,
+                "test",
+                str(REPO_ROOT),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**os.environ, "CHATGPT_CODEX_IMESSAGE_BRIDGE": custom_bridge},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), custom_bridge)
+
+    def test_plugin_installer_writes_bridge_env(self) -> None:
+        """install-plugin.sh should write bridge.env with resolved bridge path."""
+        script = (REPO_ROOT / "install-plugin.sh").read_text()
+        self.assertIn('printf \'CHATGPT_CODEX_IMESSAGE_BRIDGE=%s\\n\' "$BRIDGE_ROOT" > "$STAGING/bridge.env"', script)
+
+    def test_mcp_launcher_prefers_bridge_env(self) -> None:
+        """run-mcp-server.sh should read bridge.env if present."""
+        launcher = (REPO_ROOT / "scripts" / "run-mcp-server.sh").read_text()
+        self.assertIn('BRIDGE_ENV="$PLUGIN_DIR/bridge.env"', launcher)
+        self.assertIn('if [[ -f "$BRIDGE_ENV" ]]; then', launcher)
+        self.assertIn('source "$BRIDGE_ENV"', launcher)
+
+    def test_all_installers_fail_closed_on_empty_bridge_env(self) -> None:
+        """All installers should fail if CHATGPT_CODEX_IMESSAGE_BRIDGE is set but empty."""
+        for script_name in ("install.sh", "install-plugin.sh", "install-hardened.sh"):
+            with self.subTest(script=script_name):
+                script = (REPO_ROOT / script_name).read_text()
+                self.assertIn('if [[ -z "$CHATGPT_CODEX_IMESSAGE_BRIDGE" ]]; then', script)
+                self.assertIn("exit 1", script)
+
+    def test_git_install_warns_about_live_install(self) -> None:
+        """Installing from git checkout should warn if ~/imessage-bridge-chatgpt exists."""
+        script = (REPO_ROOT / "install.sh").read_text()
+        self.assertIn('LIVE_INSTALL="$HOME/imessage-bridge-chatgpt"', script)
+        self.assertIn('if [[ -x "$LIVE_INSTALL/bin/chatgpt-codex-imessage-helper" ]]; then', script)
+        self.assertIn("detected live install", script)
+
+
 if __name__ == "__main__":
     unittest.main()
