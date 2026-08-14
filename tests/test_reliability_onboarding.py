@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sqlite3
 import stat
 import subprocess
@@ -843,7 +844,15 @@ class BridgePathResolutionTests(unittest.TestCase):
         self.assertIn("must be a non-empty absolute path", empty.stderr)
 
         with tempfile.TemporaryDirectory(prefix="chatgpt-live-warning-") as td:
-            home = Path(td).resolve()
+            root = Path(td).resolve()
+            home = root / "home"
+            home.mkdir()
+            checkout = root / "source-checkout"
+            (checkout / ".git").mkdir(parents=True)
+            (checkout / "tools").mkdir()
+            shutil.copy2(REPO_ROOT / "install.sh", checkout / "install.sh")
+            for name in ("bridge_paths.sh", "select_python.sh"):
+                shutil.copy2(REPO_ROOT / "tools" / name, checkout / "tools" / name)
             helper_path = (
                 home
                 / "imessage-bridge-chatgpt"
@@ -858,7 +867,7 @@ class BridgePathResolutionTests(unittest.TestCase):
             warning_env["HOME"] = str(home)
             warning_env["INSTALL_OPENAI_PLUGIN"] = "invalid"
             warning = subprocess.run(
-                ["bash", str(REPO_ROOT / "install.sh")],
+                ["bash", str(checkout / "install.sh")],
                 capture_output=True,
                 text=True,
                 check=False,

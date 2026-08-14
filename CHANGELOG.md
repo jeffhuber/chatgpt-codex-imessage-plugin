@@ -28,6 +28,8 @@ The file-bridge protocol has its own major/minor compatibility version.
   upgrade, privacy, release-integrity, and host-support documentation.
 - Require a GitHub-verified signed tag and draft-first publication for immutable
   release assets.
+- Keep installer-warning coverage independent of `.git` metadata so the test
+  suite also passes from source release archives.
 
 ## 1.2.1 - 2026-08-13
 
