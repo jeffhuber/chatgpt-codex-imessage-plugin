@@ -173,6 +173,27 @@ class PythonSelectionTests(unittest.TestCase):
             )
             self.assertNotEqual(rejected_link.returncode, 0)
 
+    def test_hardened_selection_rejects_before_executing_untrusted_override(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="chatgpt-python-marker-") as td:
+            root = Path(td)
+            marker = root / "executed"
+            candidate = root / "python3"
+            candidate.write_text(
+                '#!/bin/sh\nprintf "executed\\n" > "$MARKER"\nexit 0\n',
+                encoding="utf-8",
+            )
+            candidate.chmod(0o755)
+            env = os.environ.copy()
+            env["IMESSAGE_HELPER_PYTHON"] = str(candidate)
+            env["MARKER"] = str(marker)
+            result = self.select(
+                "find_helper_python", env, os.environ["PATH"], "1"
+            )
+            executed = marker.exists()
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(executed)
+
     def test_all_installers_source_the_shared_selector(self) -> None:
         for name in ("install.sh", "install-hardened.sh", "install-plugin.sh"):
             source = (REPO_ROOT / name).read_text(encoding="utf-8")
@@ -401,7 +422,8 @@ class DoctorTests(unittest.TestCase):
 
     def test_doctor_json_passes_for_synthetic_install(self) -> None:
         with tempfile.TemporaryDirectory(prefix="grokbot-doctor-test-") as td:
-            bridge = Path(os.path.realpath(td)) / "bridge"
+            root = Path(os.path.realpath(td))
+            bridge = root / "bridge"
             for directory in (
                 bridge / "bin",
                 bridge / "control" / "requests",
@@ -434,6 +456,11 @@ class DoctorTests(unittest.TestCase):
             log = bridge / "control" / "log.txt"
             log.write_text("")
             log.chmod(0o600)
+            home = root / "home"
+            home.mkdir()
+            chat_db = home / "Library" / "Messages" / "chat.db"
+            chat_db.parent.mkdir(parents=True)
+            chat_db.write_bytes(b"fixture")
 
             result = subprocess.run(
                 [
@@ -445,15 +472,19 @@ class DoctorTests(unittest.TestCase):
                     "--skip-plugin",
                     "--skip-launchd",
                     "--skip-codesign",
-                    "--skip-chat-db",
                 ],
                 capture_output=True,
                 text=True,
                 check=False,
+                env={**os.environ, "HOME": str(home)},
             )
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertTrue(json.loads(result.stdout)["ok"])
+        report = json.loads(result.stdout)
+        self.assertTrue(report["ok"])
+        self.assertEqual(report["checks"]["chat_db"]["status"], "warn")
+        self.assertIn("does not test wrapper FDA", report["checks"]["chat_db"]["detail"])
+        self.assertIn("readable to this doctor process", report["checks"]["chat_db"]["detail"])
 
     def test_doctor_rejects_symlinked_bridge_ancestor(self) -> None:
         with tempfile.TemporaryDirectory(prefix="grokbot-doctor-symlink-test-") as td:
@@ -605,6 +636,222 @@ class PluginInstallTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+class BridgePathResolutionTests(unittest.TestCase):
+    resolver = REPO_ROOT / "tools" / "bridge_paths.sh"
+
+    def run_resolver(
+        self,
+        function: str,
+        *arguments: str,
+        env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        run_env = (env or os.environ).copy()
+        return subprocess.run(
+            [
+                "bash",
+                "-c",
+                'source "$1"; shift; "$@"',
+                "bridge-test",
+                str(self.resolver),
+                function,
+                *arguments,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=run_env,
+        )
+
+    def test_production_resolver_distinguishes_live_and_git_trees(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="chatgpt-bridge-resolver-") as td:
+            source_root = Path(td).resolve()
+            default = source_root / "Application Support" / "Default"
+            env = os.environ.copy()
+            env.pop("CHATGPT_CODEX_IMESSAGE_BRIDGE", None)
+
+            live = self.run_resolver(
+                "resolve_install_bridge",
+                str(source_root),
+                str(default),
+                "1",
+                env=env,
+            )
+            self.assertEqual(live.returncode, 0, live.stderr)
+            self.assertEqual(Path(live.stdout.strip()).resolve(), source_root)
+
+            (source_root / ".git").write_text("gitdir: elsewhere\n")
+            checkout = self.run_resolver(
+                "resolve_install_bridge",
+                str(source_root),
+                str(default),
+                "1",
+                env=env,
+            )
+            self.assertEqual(checkout.returncode, 0, checkout.stderr)
+            self.assertEqual(checkout.stdout.strip(), str(default))
+
+    def test_explicit_bridge_override_is_absolute_and_control_free(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="chatgpt-bridge-resolver-") as td:
+            source_root = str(Path(td).resolve())
+            default = f"{source_root}/default"
+            valid = f"{source_root}/Bridge With Spaces"
+            env = os.environ.copy()
+            env["CHATGPT_CODEX_IMESSAGE_BRIDGE"] = valid
+            accepted = self.run_resolver(
+                "resolve_install_bridge", source_root, default, "1", env=env
+            )
+            self.assertEqual(accepted.returncode, 0, accepted.stderr)
+            self.assertEqual(accepted.stdout.strip(), valid)
+
+            for invalid in ("", "relative/path", f"{source_root}/bad\npath", f"{source_root}/bad\tpath"):
+                with self.subTest(value=invalid):
+                    env["CHATGPT_CODEX_IMESSAGE_BRIDGE"] = invalid
+                    rejected = self.run_resolver(
+                        "resolve_install_bridge", source_root, default, "1", env=env
+                    )
+                    self.assertNotEqual(rejected.returncode, 0)
+                    self.assertEqual(rejected.stdout, "")
+
+    def test_bridge_path_file_is_data_only_and_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="chatgpt-bridge-file-") as td:
+            root = Path(td).resolve()
+            path_file = root / "bridge-path"
+            bridge = root / "Bridge With Spaces"
+            written = self.run_resolver(
+                "write_bridge_path_file", str(path_file), str(bridge)
+            )
+            self.assertEqual(written.returncode, 0, written.stderr)
+            self.assertEqual(path_file.read_text(), f"{bridge}\n")
+            self.assertEqual(stat.S_IMODE(path_file.stat().st_mode), 0o600)
+
+            directory_destination = root / "destination-directory"
+            directory_destination.mkdir()
+            failed_write = self.run_resolver(
+                "write_bridge_path_file", str(directory_destination), str(bridge)
+            )
+            self.assertNotEqual(failed_write.returncode, 0)
+
+            env = os.environ.copy()
+            env.pop("CHATGPT_CODEX_IMESSAGE_BRIDGE", None)
+            read = self.run_resolver(
+                "resolve_runtime_bridge",
+                str(path_file),
+                str(root / "default"),
+                env=env,
+            )
+            self.assertEqual(read.returncode, 0, read.stderr)
+            self.assertEqual(read.stdout.strip(), str(bridge))
+
+            path_file.write_text(f"{bridge}\n/second-line\n")
+            malformed = self.run_resolver(
+                "resolve_runtime_bridge",
+                str(path_file),
+                str(root / "default"),
+                env=env,
+            )
+            self.assertNotEqual(malformed.returncode, 0)
+
+            path_file.unlink()
+            target = root / "target"
+            target.write_text(f"{bridge}\n")
+            path_file.symlink_to(target)
+            linked = self.run_resolver(
+                "resolve_runtime_bridge",
+                str(path_file),
+                str(root / "default"),
+                env=env,
+            )
+            self.assertNotEqual(linked.returncode, 0)
+
+    def test_mcp_launcher_reads_space_containing_path_without_sourcing_it(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="chatgpt-launcher-") as td:
+            plugin = Path(td).resolve() / "plugin"
+            scripts = plugin / "scripts"
+            server_dir = plugin / "plugin_server"
+            scripts.mkdir(parents=True)
+            server_dir.mkdir()
+            launcher = scripts / "run-mcp-server.sh"
+            launcher.write_text(
+                (REPO_ROOT / "scripts" / "run-mcp-server.sh").read_text()
+            )
+            launcher.chmod(0o700)
+            (scripts / "bridge_paths.sh").write_text(self.resolver.read_text())
+            (server_dir / "server.py").write_text("# fixture\n")
+
+            bridge = Path(td).resolve() / "Bridge With Spaces"
+            python = bridge / "mcp-venv" / "bin" / "python"
+            python.parent.mkdir(parents=True)
+            python.write_text('#!/bin/sh\nprintf "ran\\n" > "$MARKER"\n')
+            python.chmod(0o700)
+            (plugin / "bridge-path").write_text(f"{bridge}\n")
+            marker = Path(td) / "marker"
+            env = os.environ.copy()
+            env.pop("CHATGPT_CODEX_IMESSAGE_BRIDGE", None)
+            env["MARKER"] = str(marker)
+
+            result = subprocess.run(
+                ["bash", str(launcher)],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(marker.read_text(), "ran\n")
+
+    def test_installer_errors_and_warnings_use_defined_logging_functions(self) -> None:
+        empty_env = os.environ.copy()
+        empty_env["CHATGPT_CODEX_IMESSAGE_BRIDGE"] = ""
+        empty = subprocess.run(
+            ["bash", str(REPO_ROOT / "install.sh")],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=empty_env,
+        )
+        self.assertNotEqual(empty.returncode, 0)
+        self.assertNotIn("command not found", empty.stderr)
+        self.assertIn("must be a non-empty absolute path", empty.stderr)
+
+        with tempfile.TemporaryDirectory(prefix="chatgpt-live-warning-") as td:
+            home = Path(td).resolve()
+            helper_path = (
+                home
+                / "imessage-bridge-chatgpt"
+                / "bin"
+                / "chatgpt-codex-imessage-helper"
+            )
+            helper_path.parent.mkdir(parents=True)
+            helper_path.write_text("#!/bin/sh\n")
+            helper_path.chmod(0o700)
+            warning_env = os.environ.copy()
+            warning_env.pop("CHATGPT_CODEX_IMESSAGE_BRIDGE", None)
+            warning_env["HOME"] = str(home)
+            warning_env["INSTALL_OPENAI_PLUGIN"] = "invalid"
+            warning = subprocess.run(
+                ["bash", str(REPO_ROOT / "install.sh")],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=warning_env,
+            )
+            self.assertNotEqual(warning.returncode, 0)
+            self.assertNotIn("command not found", warning.stderr)
+            self.assertIn("detected live install", warning.stdout)
+
+    def test_installers_and_launcher_use_the_production_resolver(self) -> None:
+        for relative in (
+            "install.sh",
+            "install-hardened.sh",
+            "install-plugin.sh",
+            "scripts/run-mcp-server.sh",
+        ):
+            with self.subTest(script=relative):
+                source = (REPO_ROOT / relative).read_text()
+                self.assertIn('source "$BRIDGE_RESOLVER"', source)
+                self.assertNotIn("source \"$BRIDGE_ENV\"", source)
 
 
 if __name__ == "__main__":

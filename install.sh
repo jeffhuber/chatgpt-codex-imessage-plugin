@@ -27,9 +27,34 @@ if [[ "$EUID" -eq 0 ]]; then
     exit 1
 fi
 
+bold() { printf "\033[1m%s\033[0m\n" "$*"; }
+green() { printf "\033[32m%s\033[0m\n" "$*"; }
+yellow() { printf "\033[33m%s\033[0m\n" "$*"; }
+red() { printf "\033[31m%s\033[0m\n" "$*" 1>&2; }
+
 INSTALL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 BIN_DIR="$INSTALL_ROOT/bin"
-BRIDGE_ROOT="${CHATGPT_CODEX_IMESSAGE_BRIDGE:-$HOME/Library/Application Support/ChatGPTCodexIMessage}"
+BRIDGE_RESOLVER="$INSTALL_ROOT/tools/bridge_paths.sh"
+DEFAULT_BRIDGE_ROOT="$HOME/Library/Application Support/ChatGPTCodexIMessage"
+if [[ ! -f "$BRIDGE_RESOLVER" || -L "$BRIDGE_RESOLVER" ]]; then
+    red "Missing regular bridge resolver: $BRIDGE_RESOLVER"
+    exit 1
+fi
+# shellcheck source=tools/bridge_paths.sh
+source "$BRIDGE_RESOLVER"
+if ! BRIDGE_ROOT="$(resolve_install_bridge "$INSTALL_ROOT" "$DEFAULT_BRIDGE_ROOT" 1)"; then
+    red "Unable to resolve a safe runtime bridge path."
+    exit 1
+fi
+if [[ "${CHATGPT_CODEX_IMESSAGE_BRIDGE+x}" != "x" && -e "$INSTALL_ROOT/.git" ]]; then
+    LIVE_INSTALL="$HOME/imessage-bridge-chatgpt"
+    if [[ -x "$LIVE_INSTALL/bin/chatgpt-codex-imessage-helper" ]]; then
+        yellow "Warning: detected live install at $LIVE_INSTALL"
+        yellow "Running from a git checkout will use Application Support."
+        yellow "To update the live install, run ./install.sh from $LIVE_INSTALL instead."
+    fi
+fi
+
 CONTROL_DIR="$BRIDGE_ROOT/control"
 CONTACTS_DIR="$BRIDGE_ROOT/contacts"
 HELPER_PY="$BIN_DIR/helper.py"
@@ -43,11 +68,6 @@ PLIST_DEST="$HOME/Library/LaunchAgents/com.jeffhuber.chatgpt-codex-imessage.plis
 LAUNCHCTL_LABEL="com.jeffhuber.chatgpt-codex-imessage"
 INSTALL_OPENAI_PLUGIN="${INSTALL_OPENAI_PLUGIN:-1}"
 PYTHON_SELECTOR="$INSTALL_ROOT/tools/select_python.sh"
-
-bold() { printf "\033[1m%s\033[0m\n" "$*"; }
-green() { printf "\033[32m%s\033[0m\n" "$*"; }
-yellow() { printf "\033[33m%s\033[0m\n" "$*"; }
-red() { printf "\033[31m%s\033[0m\n" "$*" 1>&2; }
 
 if [[ ! -f "$PYTHON_SELECTOR" || -L "$PYTHON_SELECTOR" ]]; then
     red "Missing regular Python selector: $PYTHON_SELECTOR"

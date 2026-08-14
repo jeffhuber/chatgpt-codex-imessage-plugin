@@ -9,11 +9,22 @@ if [[ "$EUID" -eq 0 ]]; then
 fi
 
 SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+BRIDGE_RESOLVER="$SOURCE_ROOT/tools/bridge_paths.sh"
+if [[ ! -f "$BRIDGE_RESOLVER" || -L "$BRIDGE_RESOLVER" ]]; then
+    echo "Error: missing regular bridge resolver: $BRIDGE_RESOLVER" >&2
+    exit 1
+fi
+# shellcheck source=tools/bridge_paths.sh
+source "$BRIDGE_RESOLVER"
 PLUGIN_NAME="chatgpt-codex-imessage-plugin"
 PLUGIN_PARENT="$HOME/plugins"
 PLUGIN_DEST="$PLUGIN_PARENT/$PLUGIN_NAME"
 MARKETPLACE="$HOME/.agents/plugins/marketplace.json"
-BRIDGE_ROOT="${CHATGPT_CODEX_IMESSAGE_BRIDGE:-$HOME/Library/Application Support/ChatGPTCodexIMessage}"
+if ! BRIDGE_ROOT="$(resolve_install_bridge "$SOURCE_ROOT" "$HOME/Library/Application Support/ChatGPTCodexIMessage" 1)"; then
+    echo "Error: unable to resolve a safe runtime bridge path." >&2
+    exit 1
+fi
+
 MCP_VENV="$BRIDGE_ROOT/mcp-venv"
 PYTHON_SELECTOR="$SOURCE_ROOT/tools/select_python.sh"
 
@@ -72,7 +83,10 @@ for directory in .codex-plugin plugin_server skills; do
 done
 cp "$SOURCE_ROOT/.mcp.json" "$STAGING/.mcp.json"
 cp "$SOURCE_ROOT/scripts/run-mcp-server.sh" "$STAGING/scripts/run-mcp-server.sh"
+cp "$BRIDGE_RESOLVER" "$STAGING/scripts/bridge_paths.sh"
 cp "$SOURCE_ROOT/LICENSE" "$STAGING/LICENSE"
+write_bridge_path_file "$STAGING/bridge-path" "$BRIDGE_ROOT"
+
 find "$STAGING" -type d -exec chmod 700 {} +
 find "$STAGING" -type f -exec chmod 600 {} +
 chmod 700 "$STAGING/scripts/run-mcp-server.sh"

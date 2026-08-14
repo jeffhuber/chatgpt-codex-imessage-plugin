@@ -5,6 +5,25 @@ The file-bridge protocol has its own major/minor compatibility version.
 
 ## Unreleased
 
+- Harden hardened-install Python selection by validating interpreter ownership
+  and path permissions before executing a compatibility probe.
+- Report shell-only `chat.db` access accurately in `doctor.py`; the wrapper's Full
+  Disk Access remains verified by the smoke test.
+- Pin setup-python by commit, prevent release checkout credential persistence,
+  and add weekly Python dependency monitoring.
+
+- Install from a non-git live folder (e.g. `~/imessage-bridge-chatgpt`)
+  defaults the bridge to that same folder, matching the Grok/Claude pattern.
+  Wrapper, control queue, contacts, and MCP venv stay together.
+- `install-plugin.sh` writes a validated, non-executable `bridge-path` data
+  file so the MCP launcher can find the correct bridge without hardcoded paths.
+- `scripts/run-mcp-server.sh` reads from fail-closed
+  `CHATGPT_CODEX_IMESSAGE_BRIDGE`, then `bridge-path`, then Application Support.
+- Empty `CHATGPT_CODEX_IMESSAGE_BRIDGE` now fails closed in all installers and
+  the MCP launcher.
+- Installing from a git checkout warns when `~/imessage-bridge-chatgpt` exists
+  with a live helper.
+
 ## 1.2.1 - 2026-08-13
 
 - Select the FDA helper and user-level MCP Python runtimes independently,

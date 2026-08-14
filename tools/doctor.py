@@ -165,8 +165,14 @@ def inspect_install(args: argparse.Namespace) -> dict[str, Any]:
         chat_db = pathlib.Path.home() / "Library" / "Messages" / "chat.db"
         ok = chat_db.is_file() and os.access(chat_db, os.R_OK)
         checks["chat_db"] = check(
-            "pass" if ok else "fail",
-            f"{chat_db} {'readable' if ok else 'missing or not readable; check Full Disk Access'}",
+            "warn",
+            (
+                f"{chat_db} readable to this doctor process; this does not test "
+                "wrapper FDA. Run the smoke test to verify wrapper access"
+                if ok
+                else f"{chat_db} not readable to this doctor process; this does not "
+                "test wrapper FDA. Run the smoke test to verify wrapper access"
+            ),
         )
 
     if not args.skip_plugin:
@@ -174,7 +180,9 @@ def inspect_install(args: argparse.Namespace) -> dict[str, Any]:
         plugin_files = [
             plugin_root / ".codex-plugin" / "plugin.json",
             plugin_root / ".mcp.json",
+            plugin_root / "bridge-path",
             plugin_root / "plugin_server" / "server.py",
+            plugin_root / "scripts" / "bridge_paths.sh",
             plugin_root / "scripts" / "run-mcp-server.sh",
         ]
         files_ok = all(
@@ -209,7 +217,7 @@ def inspect_install(args: argparse.Namespace) -> dict[str, Any]:
         )
 
     return {
-        "ok": all(value["status"] == "pass" for value in checks.values()),
+        "ok": all(value["status"] != "fail" for value in checks.values()),
         "architecture": "hardened" if hardened else "standard",
         "bridge": str(bridge),
         "code_root": str(code_root),
@@ -235,7 +243,15 @@ def main() -> int:
     else:
         for name, result in report["checks"].items():
             print(f"[{result['status'].upper():4}] {name}: {result['detail']}")
-        print("\nOverall:", "healthy" if report["ok"] else "attention required")
+        has_warnings = any(
+            result["status"] == "warn" for result in report["checks"].values()
+        )
+        overall = (
+            "healthy with warnings"
+            if report["ok"] and has_warnings
+            else "healthy" if report["ok"] else "attention required"
+        )
+        print("\nOverall:", overall)
     return 0 if report["ok"] else 1
 
 
