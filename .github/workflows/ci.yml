@@ -33,7 +33,7 @@ jobs:
       - run: python tools/check_shared_core.py
       - run: bash -n install.sh install-hardened.sh install-plugin.sh uninstall.sh uninstall-hardened.sh scripts/run-mcp-server.sh tools/select_python.sh
       - run: shellcheck install.sh install-hardened.sh install-plugin.sh uninstall.sh uninstall-hardened.sh scripts/run-mcp-server.sh tools/select_python.sh
-      - run: python tools/check_version.py v1.2.0
+      - run: python tools/check_version.py v1.2.1
   macos:
     runs-on: macos-latest
     steps:
