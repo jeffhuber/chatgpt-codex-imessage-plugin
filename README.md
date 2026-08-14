@@ -118,8 +118,8 @@ could replace that code. Its default blocklist protects against accidental
 disclosure, not a compromised same-user process.
 
 You can override the bridge location with the `CHATGPT_CODEX_IMESSAGE_BRIDGE`
-environment variable if set to a non-empty absolute path. An explicitly empty
-value fails closed.
+environment variable if it contains a non-empty absolute path without control
+characters. Empty, relative, or control-character values fail closed.
 
 **Hardened install:**
 

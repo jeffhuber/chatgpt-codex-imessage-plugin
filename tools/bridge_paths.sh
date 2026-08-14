@@ -39,8 +39,8 @@ write_bridge_path_file() {
 
     _imessage_bridge_path_is_valid "$bridge_root" || return 1
     [[ ! -L "$destination" ]] || return 1
-    printf '%s\n' "$bridge_root" > "$destination"
-    chmod 600 "$destination"
+    printf '%s\n' "$bridge_root" > "$destination" || return 1
+    chmod 600 "$destination" || return 1
 }
 
 read_bridge_path_file() {

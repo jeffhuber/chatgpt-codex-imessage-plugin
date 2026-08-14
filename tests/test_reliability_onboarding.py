@@ -458,6 +458,9 @@ class DoctorTests(unittest.TestCase):
             log.chmod(0o600)
             home = root / "home"
             home.mkdir()
+            chat_db = home / "Library" / "Messages" / "chat.db"
+            chat_db.parent.mkdir(parents=True)
+            chat_db.write_bytes(b"fixture")
 
             result = subprocess.run(
                 [
@@ -481,6 +484,7 @@ class DoctorTests(unittest.TestCase):
         self.assertTrue(report["ok"])
         self.assertEqual(report["checks"]["chat_db"]["status"], "warn")
         self.assertIn("does not test wrapper FDA", report["checks"]["chat_db"]["detail"])
+        self.assertIn("readable to this doctor process", report["checks"]["chat_db"]["detail"])
 
     def test_doctor_rejects_symlinked_bridge_ancestor(self) -> None:
         with tempfile.TemporaryDirectory(prefix="grokbot-doctor-symlink-test-") as td:
@@ -721,6 +725,13 @@ class BridgePathResolutionTests(unittest.TestCase):
             self.assertEqual(written.returncode, 0, written.stderr)
             self.assertEqual(path_file.read_text(), f"{bridge}\n")
             self.assertEqual(stat.S_IMODE(path_file.stat().st_mode), 0o600)
+
+            directory_destination = root / "destination-directory"
+            directory_destination.mkdir()
+            failed_write = self.run_resolver(
+                "write_bridge_path_file", str(directory_destination), str(bridge)
+            )
+            self.assertNotEqual(failed_write.returncode, 0)
 
             env = os.environ.copy()
             env.pop("CHATGPT_CODEX_IMESSAGE_BRIDGE", None)

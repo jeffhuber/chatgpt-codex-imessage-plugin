@@ -7,7 +7,7 @@ The file-bridge protocol has its own major/minor compatibility version.
 
 - Harden hardened-install Python selection by validating interpreter ownership
   and path permissions before executing a compatibility probe.
-- Report shell-only `chat.db` access accurately in `doctor.py`; wrapper Full
+- Report shell-only `chat.db` access accurately in `doctor.py`; the wrapper's Full
   Disk Access remains verified by the smoke test.
 - Pin setup-python by commit, prevent release checkout credential persistence,
   and add weekly Python dependency monitoring.
