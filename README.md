@@ -108,7 +108,6 @@ folder and re-running `./install.sh` there.
 **Option 2: Git checkout install**
 
 ```bash
-```bash
 ./install.sh
 ```
 
