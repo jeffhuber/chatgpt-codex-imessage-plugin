@@ -66,11 +66,33 @@ class PythonSelectionTests(unittest.TestCase):
 
             mcp = self.select("find_mcp_python", env, str(fake_bin))
             self.assertEqual(mcp.returncode, 0, mcp.stderr)
-            self.assertEqual(Path(mcp.stdout.strip()), supported)
+            selected_mcp = Path(mcp.stdout.strip())
+            self.assertNotEqual(selected_mcp, unsupported)
+            mcp_probe = subprocess.run(
+                [
+                    str(selected_mcp),
+                    "-c",
+                    "import sys; raise SystemExit(sys.version_info < (3, 10))",
+                ],
+                check=False,
+            )
+            self.assertEqual(mcp_probe.returncode, 0)
 
             helper = self.select("find_helper_python", env, str(fake_bin))
             self.assertEqual(helper.returncode, 0, helper.stderr)
-            self.assertNotEqual(Path(helper.stdout.strip()), unsupported)
+            selected_helper = Path(helper.stdout.strip())
+            self.assertNotEqual(selected_helper, unsupported)
+            helper_probe = subprocess.run(
+                [
+                    str(selected_helper),
+                    "-c",
+                    "import os, sys; raise SystemExit("
+                    "sys.version_info < (3, 9) or "
+                    "os.open not in os.supports_dir_fd)",
+                ],
+                check=False,
+            )
+            self.assertEqual(helper_probe.returncode, 0)
 
             env["IMESSAGE_PYTHON"] = sys.executable
             mcp_override = self.select("find_mcp_python", env, str(fake_bin))
