@@ -5,6 +5,10 @@ The file-bridge protocol has its own major/minor compatibility version.
 
 ## Unreleased
 
+- Select the FDA helper and user-level MCP Python runtimes independently,
+  fail closed on invalid overrides, and require a protected root-owned helper
+  interpreter in hardened mode.
+
 ## 1.2.0 - 2026-08-13
 
 - Preserve an explicitly empty bridge environment variable so send-gate setup

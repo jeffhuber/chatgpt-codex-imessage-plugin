@@ -15,25 +15,14 @@ PLUGIN_DEST="$PLUGIN_PARENT/$PLUGIN_NAME"
 MARKETPLACE="$HOME/.agents/plugins/marketplace.json"
 BRIDGE_ROOT="${CHATGPT_CODEX_IMESSAGE_BRIDGE:-$HOME/Library/Application Support/ChatGPTCodexIMessage}"
 MCP_VENV="$BRIDGE_ROOT/mcp-venv"
+PYTHON_SELECTOR="$SOURCE_ROOT/tools/select_python.sh"
 
-find_supported_python() {
-    local candidate
-    local resolved
-    for candidate in "${IMESSAGE_PYTHON:-}" python3.13 python3.12 python3.11 python3.10 python3; do
-        [[ -n "$candidate" ]] || continue
-        if [[ "$candidate" == */* ]]; then
-            resolved="$candidate"
-        else
-            resolved="$(command -v "$candidate" 2>/dev/null || true)"
-        fi
-        if [[ -x "$resolved" ]] &&
-            "$resolved" -c 'import sys; raise SystemExit(sys.version_info < (3, 10))' 2>/dev/null; then
-            printf '%s\n' "$resolved"
-            return 0
-        fi
-    done
-    return 1
-}
+if [[ ! -f "$PYTHON_SELECTOR" || -L "$PYTHON_SELECTOR" ]]; then
+    echo "Error: missing regular Python selector: $PYTHON_SELECTOR" >&2
+    exit 1
+fi
+# shellcheck source=tools/select_python.sh
+source "$PYTHON_SELECTOR"
 
 require_directory_or_missing() {
     local path="$1"
@@ -47,8 +36,9 @@ require_directory_or_missing() {
     fi
 }
 
-if ! PYTHON="$(find_supported_python)"; then
+if ! PYTHON="$(find_mcp_python "$PATH")"; then
     echo "Error: Python 3.10 or newer is required for the MCP runtime." >&2
+    echo "If IMESSAGE_PYTHON is set, it must name a supported interpreter." >&2
     exit 1
 fi
 
@@ -121,5 +111,6 @@ fi
 
 echo "Installed local plugin: $PLUGIN_DEST"
 echo "Installed MCP runtime: $MCP_VENV"
+echo "MCP bootstrap Python: $PYTHON"
 echo "Updated personal marketplace: $MARKETPLACE"
 echo "Restart the ChatGPT desktop app before first use."

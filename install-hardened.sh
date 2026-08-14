@@ -28,6 +28,7 @@ ALLOWLIST="$CONFIG_ROOT/allowed_chats.txt"
 CURRENT_USER="$(id -un)"
 INSTALL_OPENAI_PLUGIN="${INSTALL_OPENAI_PLUGIN:-1}"
 BUILD_DIR="$(mktemp -d -t chatgpt-codex-imessage-build.XXXXXX)"
+PYTHON_SELECTOR="$SOURCE_ROOT/tools/select_python.sh"
 trap 'rm -rf "$BUILD_DIR"' EXIT
 
 require_safe_runtime_entry() {
@@ -47,28 +48,12 @@ require_safe_runtime_entry() {
     fi
 }
 
-find_supported_python() {
-    local candidate
-    local resolved
-    local restricted_path="$PATH"
-    PATH="$ORIGINAL_PATH"
-    for candidate in "${IMESSAGE_PYTHON:-}" python3.13 python3.12 python3.11 python3.10 python3; do
-        [[ -n "$candidate" ]] || continue
-        if [[ "$candidate" == */* ]]; then
-            resolved="$candidate"
-        else
-            resolved="$(command -v "$candidate" 2>/dev/null || true)"
-        fi
-        if [[ -x "$resolved" ]] &&
-            "$resolved" -c 'import sys; raise SystemExit(sys.version_info < (3, 10))' 2>/dev/null; then
-            PATH="$restricted_path"
-            printf '%s\n' "$resolved"
-            return 0
-        fi
-    done
-    PATH="$restricted_path"
-    return 1
-}
+if [[ ! -f "$PYTHON_SELECTOR" || -L "$PYTHON_SELECTOR" ]]; then
+    echo "Error: missing regular Python selector: $PYTHON_SELECTOR" >&2
+    exit 1
+fi
+# shellcheck source=tools/select_python.sh
+source "$PYTHON_SELECTOR"
 
 if [[ "$INSTALL_OPENAI_PLUGIN" != "0" && "$INSTALL_OPENAI_PLUGIN" != "1" ]]; then
     echo "Error: INSTALL_OPENAI_PLUGIN must be 0 or 1." >&2
@@ -85,9 +70,19 @@ if ! xcode-select -p >/dev/null 2>&1; then
     echo "Error: install Xcode Command Line Tools with xcode-select --install" >&2
     exit 1
 fi
-if ! PYTHON3_PATH="$(find_supported_python)"; then
-    echo "Error: Python 3.10 or newer is required for the MCP runtime." >&2
+if ! HELPER_PYTHON_PATH="$(find_helper_python "$ORIGINAL_PATH" 1)"; then
+    echo "Error: hardened mode requires a trusted Python 3.9 or newer" >&2
+    echo "with dir_fd support for the FDA helper. If IMESSAGE_HELPER_PYTHON" >&2
+    echo "is set, its file and parents must be root-owned and protected." >&2
     exit 1
+fi
+MCP_PYTHON_PATH=""
+if [[ "$INSTALL_OPENAI_PLUGIN" == "1" ]]; then
+    if ! MCP_PYTHON_PATH="$(find_mcp_python "$ORIGINAL_PATH")"; then
+        echo "Error: Python 3.10 or newer is required for the MCP runtime." >&2
+        echo "If IMESSAGE_PYTHON is set, it must name a supported interpreter." >&2
+        exit 1
+    fi
 fi
 
 for path in \
@@ -97,6 +92,7 @@ for path in \
     "$SOURCE_ROOT/bin/confirm_imessage_send.m" \
     "$SOURCE_ROOT/tools/doctor.py" \
     "$SOURCE_ROOT/tools/configure_allowlist.py" \
+    "$PYTHON_SELECTOR" \
     "$SOURCE_ROOT/contacts/blocked_chats.txt.template" \
     "$SOURCE_ROOT/contacts/allowed_chats.txt.template" \
     "$SOURCE_ROOT/install-plugin.sh" \
@@ -147,7 +143,7 @@ if [[ ! -e "$ALLOWLIST" ]]; then
     sudo /usr/bin/install -o root -g wheel -m 600 \
         "$SOURCE_ROOT/contacts/allowed_chats.txt.template" "$ALLOWLIST"
 fi
-if ! "$PYTHON3_PATH" - "$ALLOWLIST" <<'PYCHECK'; then
+if ! "$HELPER_PYTHON_PATH" - "$ALLOWLIST" <<'PYCHECK'; then
 import os
 import stat
 import sys
@@ -174,7 +170,7 @@ clang -Wall -Wextra -Werror -O2 \
     -DSEND_GATE_SCRIPT="\"$CODE_ROOT/bin/send_gate.py\"" \
     -DCONFIRM_HELPER="\"$CODE_ROOT/bin/chatgpt-codex-imessage-confirm\"" \
     -DBRIDGE_ROOT="\"$BRIDGE_ROOT\"" \
-    -DPYTHON_INTERPRETER="\"$PYTHON3_PATH\"" \
+    -DPYTHON_INTERPRETER="\"$HELPER_PYTHON_PATH\"" \
     -DEXPECTED_CODE_UID=0 \
     -DREAD_POLICY_MODE='"allowlist"' \
     -DREAD_ALLOWLIST_PATH="\"$ALLOWLIST\"" \
@@ -210,7 +206,7 @@ sudo /usr/bin/install -o root -g wheel -m 555 \
     "$SOURCE_ROOT/tools/configure_allowlist.py" "$CODE_ROOT/tools/configure_allowlist.py"
 
 mkdir -p "$(dirname "$PLIST_DEST")"
-"$PYTHON3_PATH" - "$CODE_ROOT" "$BRIDGE_ROOT" "$PLIST_DEST" "$PLIST_TEMPLATE" <<'PYGEN'
+"$HELPER_PYTHON_PATH" - "$CODE_ROOT" "$BRIDGE_ROOT" "$PLIST_DEST" "$PLIST_TEMPLATE" <<'PYGEN'
 import sys
 import xml.etree.ElementTree as ET
 
@@ -231,7 +227,7 @@ launchctl bootstrap "gui/$UID" "$PLIST_DEST"
 launchctl enable "gui/$UID/$LABEL"
 if [[ "$INSTALL_OPENAI_PLUGIN" == "1" ]]; then
     PATH="$ORIGINAL_PATH" \
-        IMESSAGE_PYTHON="$PYTHON3_PATH" \
+        IMESSAGE_PYTHON="$MCP_PYTHON_PATH" \
         CHATGPT_CODEX_IMESSAGE_BRIDGE="$BRIDGE_ROOT" \
         "$SOURCE_ROOT/install-plugin.sh"
 else
@@ -245,13 +241,15 @@ Hardened install complete.
 Trusted code (root-owned): $CODE_ROOT
 Runtime bridge (user-owned): $BRIDGE_ROOT
 Read policy: root-owned allowlist (default-deny)
+FDA helper Python: $HELPER_PYTHON_PATH
+MCP Python: ${MCP_PYTHON_PATH:-not installed}
 
 Add an allowed contact before reading:
-  python3 "$CODE_ROOT/tools/configure_allowlist.py" add +15551234567
+  "$HELPER_PYTHON_PATH" "$CODE_ROOT/tools/configure_allowlist.py" add +15551234567
 
 Grant Full Disk Access to:
   $CODE_ROOT/bin/chatgpt-codex-imessage-helper
 
 Then verify:
-  "$PYTHON3_PATH" "$CODE_ROOT/tools/doctor.py" --bridge "$BRIDGE_ROOT" --code-root "$CODE_ROOT" --architecture hardened
+  "$HELPER_PYTHON_PATH" "$CODE_ROOT/tools/doctor.py" --bridge "$BRIDGE_ROOT" --code-root "$CODE_ROOT" --architecture hardened
 EOF

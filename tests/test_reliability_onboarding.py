@@ -27,6 +27,171 @@ class LaunchAgentIdentityTests(unittest.TestCase):
         self.assertIn("{{CODE_ROOT}}/bin/chatgpt-codex-imessage-helper", template)
 
 
+class PythonSelectionTests(unittest.TestCase):
+    selector = REPO_ROOT / "tools" / "select_python.sh"
+
+    def select(
+        self,
+        function: str,
+        env: dict[str, str],
+        *arguments: str,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                "bash",
+                "-c",
+                'source "$1"; shift; "$@"',
+                "selector-test",
+                str(self.selector),
+                function,
+                *arguments,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+
+    def test_selectors_skip_bad_path_python_and_honor_valid_overrides(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="chatgpt-python-selector-") as td:
+            fake_bin = Path(td)
+            unsupported = fake_bin / "python3"
+            unsupported.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+            unsupported.chmod(0o755)
+            supported = fake_bin / "python3.12"
+            supported.symlink_to(sys.executable)
+            env = os.environ.copy()
+            env.pop("IMESSAGE_HELPER_PYTHON", None)
+            env.pop("IMESSAGE_PYTHON", None)
+
+            mcp = self.select("find_mcp_python", env, str(fake_bin))
+            self.assertEqual(mcp.returncode, 0, mcp.stderr)
+            selected_mcp = Path(mcp.stdout.strip())
+            self.assertNotEqual(selected_mcp, unsupported)
+            mcp_probe = subprocess.run(
+                [
+                    str(selected_mcp),
+                    "-c",
+                    "import sys; raise SystemExit(sys.version_info < (3, 10))",
+                ],
+                check=False,
+            )
+            self.assertEqual(mcp_probe.returncode, 0)
+
+            helper = self.select("find_helper_python", env, str(fake_bin))
+            self.assertEqual(helper.returncode, 0, helper.stderr)
+            selected_helper = Path(helper.stdout.strip())
+            self.assertNotEqual(selected_helper, unsupported)
+            helper_probe = subprocess.run(
+                [
+                    str(selected_helper),
+                    "-c",
+                    "import os, sys; raise SystemExit("
+                    "sys.version_info < (3, 9) or "
+                    "os.open not in os.supports_dir_fd)",
+                ],
+                check=False,
+            )
+            self.assertEqual(helper_probe.returncode, 0)
+
+            env["IMESSAGE_PYTHON"] = sys.executable
+            mcp_override = self.select("find_mcp_python", env, str(fake_bin))
+            self.assertEqual(mcp_override.returncode, 0, mcp_override.stderr)
+            self.assertEqual(mcp_override.stdout.strip(), sys.executable)
+
+            env.pop("IMESSAGE_PYTHON")
+            env["IMESSAGE_HELPER_PYTHON"] = sys.executable
+            helper_override = self.select("find_helper_python", env, str(fake_bin))
+            self.assertEqual(helper_override.returncode, 0, helper_override.stderr)
+            self.assertEqual(helper_override.stdout.strip(), sys.executable)
+
+    def test_explicit_invalid_or_empty_overrides_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="chatgpt-python-selector-") as td:
+            fake_bin = Path(td)
+            supported = fake_bin / "python3.12"
+            supported.symlink_to(sys.executable)
+            unsupported = fake_bin / "unsupported-python"
+            unsupported.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+            unsupported.chmod(0o755)
+
+            for variable, function in (
+                ("IMESSAGE_PYTHON", "find_mcp_python"),
+                ("IMESSAGE_HELPER_PYTHON", "find_helper_python"),
+            ):
+                for value in ("", "python3", str(unsupported)):
+                    with self.subTest(variable=variable, value=value):
+                        env = os.environ.copy()
+                        env.pop("IMESSAGE_PYTHON", None)
+                        env.pop("IMESSAGE_HELPER_PYTHON", None)
+                        env[variable] = value
+                        result = self.select(function, env, str(fake_bin))
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertEqual(result.stdout, "")
+
+    def test_helper_and_mcp_overrides_are_independent(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="chatgpt-python-selector-") as td:
+            fake_bin = Path(td)
+            supported = fake_bin / "python3.12"
+            supported.symlink_to(sys.executable)
+
+            helper_env = os.environ.copy()
+            helper_env["IMESSAGE_PYTHON"] = ""
+            helper_env.pop("IMESSAGE_HELPER_PYTHON", None)
+            helper = self.select("find_helper_python", helper_env, str(fake_bin))
+            self.assertEqual(helper.returncode, 0, helper.stderr)
+
+            mcp_env = os.environ.copy()
+            mcp_env["IMESSAGE_HELPER_PYTHON"] = ""
+            mcp_env.pop("IMESSAGE_PYTHON", None)
+            mcp = self.select("find_mcp_python", mcp_env, str(fake_bin))
+            self.assertEqual(mcp.returncode, 0, mcp.stderr)
+
+    @unittest.skipUnless(sys.platform == "darwin", "macOS stat semantics")
+    def test_hardened_helper_requires_a_root_owned_interpreter_path(self) -> None:
+        trusted = Path("/usr/bin/python3")
+        if not trusted.is_file():
+            self.skipTest("/usr/bin/python3 is unavailable on this runner")
+
+        env = os.environ.copy()
+        env["IMESSAGE_HELPER_PYTHON"] = str(trusted)
+        accepted = self.select("find_helper_python", env, os.environ["PATH"], "1")
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+
+        with tempfile.TemporaryDirectory(prefix="chatgpt-untrusted-python-") as td:
+            untrusted = Path(td) / "python3"
+            untrusted.write_bytes(trusted.read_bytes())
+            untrusted.chmod(0o755)
+            env["IMESSAGE_HELPER_PYTHON"] = str(untrusted)
+            rejected = self.select("find_helper_python", env, os.environ["PATH"], "1")
+            self.assertNotEqual(rejected.returncode, 0)
+
+            linked = Path(td) / "python-link"
+            linked.symlink_to(trusted)
+            env["IMESSAGE_HELPER_PYTHON"] = str(linked)
+            rejected_link = self.select(
+                "find_helper_python", env, os.environ["PATH"], "1"
+            )
+            self.assertNotEqual(rejected_link.returncode, 0)
+
+    def test_all_installers_source_the_shared_selector(self) -> None:
+        for name in ("install.sh", "install-hardened.sh", "install-plugin.sh"):
+            source = (REPO_ROOT / name).read_text(encoding="utf-8")
+            self.assertIn('source "$PYTHON_SELECTOR"', source, name)
+            self.assertNotIn("find_supported_python()", source, name)
+
+        standard = (REPO_ROOT / "install.sh").read_text(encoding="utf-8")
+        hardened = (REPO_ROOT / "install-hardened.sh").read_text(encoding="utf-8")
+        self.assertIn('HELPER_PYTHON_PATH="$(find_helper_python "$PATH")"', standard)
+        self.assertIn('MCP_PYTHON_PATH="$(find_mcp_python "$PATH")"', standard)
+        self.assertIn(
+            'HELPER_PYTHON_PATH="$(find_helper_python "$ORIGINAL_PATH" 1)"',
+            hardened,
+        )
+        self.assertIn(
+            'MCP_PYTHON_PATH="$(find_mcp_python "$ORIGINAL_PATH")"', hardened
+        )
+
+
 class SQLiteBackupTests(unittest.TestCase):
     def test_copy_chatdb_uses_sqlite_backup_and_returns_consistent_snapshot(self) -> None:
         with tempfile.TemporaryDirectory(prefix="grokbot-db-test-") as td:
@@ -415,6 +580,7 @@ class PluginInstallTests(unittest.TestCase):
         self.assertIn('PLUGIN_DEST="$PLUGIN_PARENT/$PLUGIN_NAME"', script)
         self.assertIn('MARKETPLACE="$HOME/.agents/plugins/marketplace.json"', script)
         self.assertIn('MCP_VENV="$BRIDGE_ROOT/mcp-venv"', script)
+        self.assertIn('PYTHON="$(find_mcp_python "$PATH")"', script)
         self.assertIn('plugin add "$PLUGIN_NAME@personal"', script)
 
     def test_main_installer_supports_skipping_plugin_install(self) -> None:

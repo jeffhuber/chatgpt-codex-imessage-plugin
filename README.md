@@ -44,6 +44,24 @@ sends, or arbitrary database queries.
 - Network access during installation to install the pinned official Python MCP
   SDK (`mcp==2.0.0`) into a dedicated local virtual environment
 
+The installers select two Python roles independently. The FDA helper uses
+Python 3.9 or newer with the `dir_fd` support required by its no-follow file
+operations; the local MCP environment uses Python 3.10 or newer. To override
+them, scope absolute paths to one install:
+
+```bash
+IMESSAGE_HELPER_PYTHON=/usr/bin/python3 \
+IMESSAGE_PYTHON=/opt/homebrew/bin/python3.12 \
+./install-hardened.sh
+```
+
+An explicitly set empty, missing, or unsupported override fails closed.
+Hardened mode additionally requires the helper interpreter and every parent
+directory to be root-owned, free of symlinks, and not group/world-writable.
+The MCP interpreter and resulting virtual environment remain user-owned and do
+not receive Full Disk Access. Avoid exporting these shared override names
+globally when using sibling iMessage helpers.
+
 The helper protocol is independently versioned and currently reports `1.1`.
 
 ## Install
