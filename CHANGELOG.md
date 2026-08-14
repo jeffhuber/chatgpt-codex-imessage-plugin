@@ -5,6 +5,8 @@ The file-bridge protocol has its own major/minor compatibility version.
 
 ## Unreleased
 
+## 1.2.1 - 2026-08-13
+
 - Select the FDA helper and user-level MCP Python runtimes independently,
   fail closed on invalid overrides, and require a protected root-owned helper
   interpreter in hardened mode.
