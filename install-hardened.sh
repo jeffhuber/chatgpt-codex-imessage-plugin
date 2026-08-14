@@ -16,25 +16,20 @@ if [[ "$(uname)" != "Darwin" ]]; then
 fi
 
 SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+BRIDGE_RESOLVER="$SOURCE_ROOT/tools/bridge_paths.sh"
+if [[ ! -f "$BRIDGE_RESOLVER" || -L "$BRIDGE_RESOLVER" ]]; then
+    echo "Error: missing regular bridge resolver: $BRIDGE_RESOLVER" >&2
+    exit 1
+fi
+# shellcheck source=tools/bridge_paths.sh
+source "$BRIDGE_RESOLVER"
 PRODUCT_ROOT="/Library/Application Support/ChatGPTCodexIMessage"
 USER_ROOT="$PRODUCT_ROOT/users/$UID"
 CODE_ROOT="$USER_ROOT/libexec"
 CONFIG_ROOT="$USER_ROOT/config"
-
-# Resolve user bridge root with fail-closed env override:
-# Hardened mode keeps code at CODE_ROOT (root-owned system path)
-# but the user bridge follows the same env/fail-closed rules.
-# If CHATGPT_CODEX_IMESSAGE_BRIDGE is set (non-empty), use it (fail closed on empty)
-# Else: Application Support default
-if [[ -n "${CHATGPT_CODEX_IMESSAGE_BRIDGE+x}" ]]; then
-    if [[ -z "$CHATGPT_CODEX_IMESSAGE_BRIDGE" ]]; then
-        echo "Error: CHATGPT_CODEX_IMESSAGE_BRIDGE is set but empty; refusing to continue." >&2
-        echo "Either unset it or provide a non-empty absolute path." >&2
-        exit 1
-    fi
-    BRIDGE_ROOT="$CHATGPT_CODEX_IMESSAGE_BRIDGE"
-else
-    BRIDGE_ROOT="$HOME/Library/Application Support/ChatGPTCodexIMessage"
+if ! BRIDGE_ROOT="$(resolve_install_bridge "$SOURCE_ROOT" "$HOME/Library/Application Support/ChatGPTCodexIMessage" 0)"; then
+    echo "Error: unable to resolve a safe runtime bridge path." >&2
+    exit 1
 fi
 
 PLIST_TEMPLATE="$SOURCE_ROOT/com.jeffhuber.chatgpt-codex-imessage.plist.template"
@@ -108,6 +103,7 @@ for path in \
     "$SOURCE_ROOT/bin/confirm_imessage_send.m" \
     "$SOURCE_ROOT/tools/doctor.py" \
     "$SOURCE_ROOT/tools/configure_allowlist.py" \
+    "$BRIDGE_RESOLVER" \
     "$PYTHON_SELECTOR" \
     "$SOURCE_ROOT/contacts/blocked_chats.txt.template" \
     "$SOURCE_ROOT/contacts/allowed_chats.txt.template" \

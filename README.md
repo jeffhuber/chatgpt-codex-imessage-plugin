@@ -93,7 +93,7 @@ sibling helpers like Grok Bot or Claude Cowork).
 Copy the repository to `~/imessage-bridge-chatgpt` and run the installer there:
 
 ```bash
-rsync -a --exclude=.git chatgpt-codex-imessage-plugin/ ~/imessage-bridge-chatgpt/
+rsync -a --exclude=.git ./ ~/imessage-bridge-chatgpt/
 cd ~/imessage-bridge-chatgpt
 ./install.sh
 ```
@@ -314,6 +314,8 @@ python3 tools/doctor.py \
 ```
 
 For a hardened install, use the exact doctor command printed by the installer.
+The doctor can only test whether its own shell process reads `chat.db`; use
+the smoke test as the authoritative check of the wrapper's Full Disk Access.
 
 Developer checks:
 
@@ -322,9 +324,11 @@ python3 -m pip install -r requirements-mcp.txt
 python3 -m unittest discover -s tests -v
 python3 -m py_compile bin/*.py plugin_server/*.py tools/*.py
 bash -n install.sh install-hardened.sh install-plugin.sh \
-  uninstall.sh uninstall-hardened.sh scripts/run-mcp-server.sh
+  uninstall.sh uninstall-hardened.sh scripts/run-mcp-server.sh \
+  tools/bridge_paths.sh
 shellcheck install.sh install-hardened.sh install-plugin.sh \
-  uninstall.sh uninstall-hardened.sh scripts/run-mcp-server.sh
+  uninstall.sh uninstall-hardened.sh scripts/run-mcp-server.sh \
+  tools/bridge_paths.sh
 python3 /path/to/plugin-creator/scripts/validate_plugin.py .
 ```
 
