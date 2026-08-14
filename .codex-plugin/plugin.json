@@ -1,6 +1,6 @@
 {
   "name": "chatgpt-codex-imessage-plugin",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Read, search, triage, and send iMessages through a local macOS helper.",
   "author": {
     "name": "Jeff Huber",

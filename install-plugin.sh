@@ -49,7 +49,7 @@ require_directory_or_missing() {
 
 if ! PYTHON="$(find_mcp_python "$PATH")"; then
     echo "Error: Python 3.10 or newer is required for the MCP runtime." >&2
-    echo "If IMESSAGE_PYTHON is set, it must name a supported interpreter." >&2
+    echo "If IMESSAGE_PYTHON is set, it must be an absolute path to a supported interpreter." >&2
     exit 1
 fi
 

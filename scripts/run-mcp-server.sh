@@ -5,6 +5,7 @@ PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 BRIDGE_RESOLVER="$PLUGIN_ROOT/scripts/bridge_paths.sh"
 if [[ ! -f "$BRIDGE_RESOLVER" || -L "$BRIDGE_RESOLVER" ]]; then
     echo "Error: missing regular bridge resolver: $BRIDGE_RESOLVER" >&2
+    echo "This launcher runs from the installed plugin. From a source checkout, run ./install-plugin.sh and restart ChatGPT." >&2
     exit 1
 fi
 # shellcheck source=tools/bridge_paths.sh

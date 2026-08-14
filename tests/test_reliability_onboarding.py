@@ -211,6 +211,22 @@ class PythonSelectionTests(unittest.TestCase):
         self.assertIn(
             'MCP_PYTHON_PATH="$(find_mcp_python "$ORIGINAL_PATH")"', hardened
         )
+        self.assertIn("absolute path to a supported interpreter", standard)
+        self.assertIn("must be an absolute path", hardened)
+
+    def test_test_runner_rejects_a_relative_interpreter_override(self) -> None:
+        env = os.environ.copy()
+        env["IMESSAGE_TEST_PYTHON"] = "python3"
+        result = subprocess.run(
+            ["bash", str(REPO_ROOT / "tools" / "test.sh")],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("absolute path", result.stderr)
 
 
 class SQLiteBackupTests(unittest.TestCase):
@@ -399,7 +415,7 @@ class DoctorTests(unittest.TestCase):
             bridge = Path(os.path.realpath(td)) / "bridge"
             result = subprocess.run(
                 [
-                    "python3",
+                    sys.executable,
                     str(REPO_ROOT / "tools" / "doctor.py"),
                     "--bridge",
                     str(bridge),
@@ -464,7 +480,7 @@ class DoctorTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python3",
+                    sys.executable,
                     str(REPO_ROOT / "tools" / "doctor.py"),
                     "--bridge",
                     str(bridge),
@@ -627,7 +643,7 @@ class PluginInstallTests(unittest.TestCase):
     def test_release_version_matches_helper(self) -> None:
         result = subprocess.run(
             [
-                "python3",
+                sys.executable,
                 str(REPO_ROOT / "tools" / "check_version.py"),
                 f"v{helper.HELPER_VERSION}",
             ],
@@ -800,6 +816,17 @@ class BridgePathResolutionTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(marker.read_text(), "ran\n")
+
+    def test_source_checkout_launcher_has_an_install_hint(self) -> None:
+        result = subprocess.run(
+            ["bash", str(REPO_ROOT / "scripts" / "run-mcp-server.sh")],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("run ./install-plugin.sh", result.stderr)
 
     def test_installer_errors_and_warnings_use_defined_logging_functions(self) -> None:
         empty_env = os.environ.copy()

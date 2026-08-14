@@ -23,17 +23,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install --requirement requirements-mcp.txt
-      - run: >-
-          python -m py_compile
-          bin/helper.py bin/send_gate.py
-          plugin_server/bridge.py plugin_server/server.py
-          tools/doctor.py tools/check_version.py tools/configure_allowlist.py
-          tools/check_shared_core.py tools/install_plugin_manifest.py
-      - run: python -m unittest discover -s tests -v
-      - run: python tools/check_shared_core.py
-      - run: bash -n install.sh install-hardened.sh install-plugin.sh uninstall.sh uninstall-hardened.sh scripts/run-mcp-server.sh tools/bridge_paths.sh tools/select_python.sh
-      - run: shellcheck install.sh install-hardened.sh install-plugin.sh uninstall.sh uninstall-hardened.sh scripts/run-mcp-server.sh tools/bridge_paths.sh tools/select_python.sh
-      - run: python tools/check_version.py v1.2.1
+      - run: IMESSAGE_TEST_PYTHON="$(command -v python)" ./tools/test.sh v1.2.2
+      - run: bash -n install.sh install-hardened.sh install-plugin.sh uninstall.sh uninstall-hardened.sh scripts/run-mcp-server.sh tools/bridge_paths.sh tools/select_python.sh tools/test.sh
+      - run: shellcheck install.sh install-hardened.sh install-plugin.sh uninstall.sh uninstall-hardened.sh scripts/run-mcp-server.sh tools/bridge_paths.sh tools/select_python.sh tools/test.sh
   macos:
     runs-on: macos-latest
     steps:
@@ -44,7 +36,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install --requirement requirements-mcp.txt
-      - run: python -m unittest discover -s tests -v
+      - run: IMESSAGE_TEST_PYTHON="$(command -v python)" ./tools/test.sh v1.2.2
       - run: plutil -lint com.jeffhuber.chatgpt-codex-imessage.plist.template
       - name: Compile FDA wrapper
         run: >-

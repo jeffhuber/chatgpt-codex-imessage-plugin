@@ -19,14 +19,21 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install --requirement requirements-mcp.txt
+      - name: Verify signed annotated tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG_OBJECT="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME" --jq '.object.sha')"
+          VERIFIED="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$TAG_OBJECT" \
+            --jq '.verification.verified == true and .verification.reason == "valid"')"
+          test "$VERIFIED" = "true"
       - name: Verify tag and source versions
-        run: python tools/check_version.py "$GITHUB_REF_NAME"
+        run: IMESSAGE_TEST_PYTHON="$(command -v python)" ./tools/test.sh "$GITHUB_REF_NAME"
       - name: Run release checks
         run: |
-          python -m py_compile bin/helper.py bin/send_gate.py plugin_server/*.py tools/*.py
-          python -m unittest discover -s tests -v
-          python tools/check_shared_core.py
-          bash -n install.sh install-hardened.sh install-plugin.sh uninstall.sh uninstall-hardened.sh scripts/run-mcp-server.sh tools/bridge_paths.sh tools/select_python.sh
+          brew install shellcheck
+          bash -n install.sh install-hardened.sh install-plugin.sh uninstall.sh uninstall-hardened.sh scripts/run-mcp-server.sh tools/bridge_paths.sh tools/select_python.sh tools/test.sh
+          shellcheck install.sh install-hardened.sh install-plugin.sh uninstall.sh uninstall-hardened.sh scripts/run-mcp-server.sh tools/bridge_paths.sh tools/select_python.sh tools/test.sh
           plutil -lint com.jeffhuber.chatgpt-codex-imessage.plist.template
           clang -Wall -Wextra -Werror -O2 \
             -DHELPER_SCRIPT='"/tmp/helper.py"' \
@@ -52,4 +59,7 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes --verify-tag
+        run: |
+          gh release create "$GITHUB_REF_NAME" --draft --generate-notes --verify-tag
+          gh release upload "$GITHUB_REF_NAME" dist/*
+          gh release edit "$GITHUB_REF_NAME" --draft=false
