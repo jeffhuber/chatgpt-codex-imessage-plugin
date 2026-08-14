@@ -42,30 +42,19 @@ PLIST_TEMPLATE="$INSTALL_ROOT/com.jeffhuber.chatgpt-codex-imessage.plist.templat
 PLIST_DEST="$HOME/Library/LaunchAgents/com.jeffhuber.chatgpt-codex-imessage.plist"
 LAUNCHCTL_LABEL="com.jeffhuber.chatgpt-codex-imessage"
 INSTALL_OPENAI_PLUGIN="${INSTALL_OPENAI_PLUGIN:-1}"
+PYTHON_SELECTOR="$INSTALL_ROOT/tools/select_python.sh"
 
 bold() { printf "\033[1m%s\033[0m\n" "$*"; }
 green() { printf "\033[32m%s\033[0m\n" "$*"; }
 yellow() { printf "\033[33m%s\033[0m\n" "$*"; }
 red() { printf "\033[31m%s\033[0m\n" "$*" 1>&2; }
 
-find_supported_python() {
-    local candidate
-    local resolved
-    for candidate in "${IMESSAGE_PYTHON:-}" python3.13 python3.12 python3.11 python3.10 python3; do
-        [[ -n "$candidate" ]] || continue
-        if [[ "$candidate" == */* ]]; then
-            resolved="$candidate"
-        else
-            resolved="$(command -v "$candidate" 2>/dev/null || true)"
-        fi
-        if [[ -x "$resolved" ]] &&
-            "$resolved" -c 'import sys; raise SystemExit(sys.version_info < (3, 10))' 2>/dev/null; then
-            printf '%s\n' "$resolved"
-            return 0
-        fi
-    done
-    return 1
-}
+if [[ ! -f "$PYTHON_SELECTOR" || -L "$PYTHON_SELECTOR" ]]; then
+    red "Missing regular Python selector: $PYTHON_SELECTOR"
+    exit 1
+fi
+# shellcheck source=tools/select_python.sh
+source "$PYTHON_SELECTOR"
 
 require_safe_runtime_entry() {
     local path="$1"
@@ -108,9 +97,18 @@ for cmd in clang codesign launchctl; do
     fi
 done
 
-if ! PYTHON3_PATH="$(find_supported_python)"; then
-    red "Python 3.10 or newer is required for the MCP runtime."
+if ! HELPER_PYTHON_PATH="$(find_helper_python "$PATH")"; then
+    red "Python 3.9 or newer with dir_fd support is required for the helper."
+    red "If IMESSAGE_HELPER_PYTHON is set, it must name a supported interpreter."
     exit 1
+fi
+MCP_PYTHON_PATH=""
+if [[ "$INSTALL_OPENAI_PLUGIN" == "1" ]]; then
+    if ! MCP_PYTHON_PATH="$(find_mcp_python "$PATH")"; then
+        red "Python 3.10 or newer is required for the MCP runtime."
+        red "If IMESSAGE_PYTHON is set, it must name a supported interpreter."
+        exit 1
+    fi
 fi
 
 if [[ ! -f "$WRAPPER_SRC" ]]; then
@@ -148,6 +146,10 @@ echo "  install root : $INSTALL_ROOT"
 echo "  bridge root  : $BRIDGE_ROOT"
 echo "  helper.py    : $HELPER_PY"
 echo "  wrapper bin  : $WRAPPER_BIN"
+echo "  helper Python: $HELPER_PYTHON_PATH"
+if [[ "$INSTALL_OPENAI_PLUGIN" == "1" ]]; then
+    echo "  MCP Python   : $MCP_PYTHON_PATH"
+fi
 echo "  launchd plist: $PLIST_DEST"
 echo
 
@@ -215,7 +217,7 @@ clang -Wall -Wextra -Werror -O2 \
     -DBRIDGE_ROOT="\"$BRIDGE_ROOT\"" \
     -DHELPER_DISPLAY_NAME='"chatgpt-codex-imessage-helper"' \
     -DHOST_DISPLAY_NAME='"ChatGPT/Codex"' \
-    -DPYTHON_INTERPRETER="\"$PYTHON3_PATH\"" \
+    -DPYTHON_INTERPRETER="\"$HELPER_PYTHON_PATH\"" \
     -o "$WRAPPER_BIN" "$WRAPPER_SRC"
 chmod 700 "$WRAPPER_BIN"
 green "  built $WRAPPER_BIN"
@@ -242,7 +244,7 @@ echo "  cdhash: ${CDHASH:-unknown}"
 mkdir -p "$(dirname "$PLIST_DEST")"
 
 # Use Python to generate the plist with proper XML escaping instead of sed.
-"$PYTHON3_PATH" - "$INSTALL_ROOT" "$BRIDGE_ROOT" "$PLIST_DEST" "$PLIST_TEMPLATE" <<'PYGEN'
+"$HELPER_PYTHON_PATH" - "$INSTALL_ROOT" "$BRIDGE_ROOT" "$PLIST_DEST" "$PLIST_TEMPLATE" <<'PYGEN'
 import sys, xml.etree.ElementTree as ET
 
 code_root, bridge_root, dest, template = sys.argv[1:]
@@ -273,7 +275,7 @@ launchctl enable "gui/$UID/$LAUNCHCTL_LABEL"
 green "  launchd agent bootstrapped ($LAUNCHCTL_LABEL)"
 
 if [[ "$INSTALL_OPENAI_PLUGIN" == "1" ]]; then
-    IMESSAGE_PYTHON="$PYTHON3_PATH" \
+    IMESSAGE_PYTHON="$MCP_PYTHON_PATH" \
         CHATGPT_CODEX_IMESSAGE_BRIDGE="$BRIDGE_ROOT" \
         "$INSTALL_ROOT/install-plugin.sh"
 else
@@ -305,8 +307,8 @@ echo "  (This is a separate permission from Full Disk Access.)"
 echo
 echo "Logs: $CONTROL_DIR/log.txt"
 if [[ "$INSTALL_OPENAI_PLUGIN" == "1" ]]; then
-    echo "Doctor: $PYTHON3_PATH $INSTALL_ROOT/tools/doctor.py --bridge \"$BRIDGE_ROOT\" --code-root \"$INSTALL_ROOT\" --architecture standard"
+    echo "Doctor: \"$HELPER_PYTHON_PATH\" \"$INSTALL_ROOT/tools/doctor.py\" --bridge \"$BRIDGE_ROOT\" --code-root \"$INSTALL_ROOT\" --architecture standard"
 else
-    echo "Doctor: $PYTHON3_PATH $INSTALL_ROOT/tools/doctor.py --bridge \"$BRIDGE_ROOT\" --code-root \"$INSTALL_ROOT\" --architecture standard --skip-plugin"
+    echo "Doctor: \"$HELPER_PYTHON_PATH\" \"$INSTALL_ROOT/tools/doctor.py\" --bridge \"$BRIDGE_ROOT\" --code-root \"$INSTALL_ROOT\" --architecture standard --skip-plugin"
 fi
 echo "Uninstall: ./uninstall.sh"

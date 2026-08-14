@@ -71,6 +71,12 @@ to require UID 0 ownership for all loaded code. Runtime queues remain
 user-owned. This prevents an ordinary same-user process from replacing trusted
 code, although administrator/root compromise remains out of scope.
 
+The hardened wrapper also embeds a separately selected helper interpreter.
+That interpreter and every parent directory must be root-owned, contain no
+symlinked path component, and deny group/world writes. The Python 3.10+ used to
+create the MCP virtual environment is selected independently because the MCP
+process is user-owned and never receives Full Disk Access.
+
 The FDA-bearing Python process opens the bridge path component-by-component
 with `O_NOFOLLOW`, then performs request, response, log, and nonce operations
 relative to verified directory descriptors. The bridge and runtime directories
