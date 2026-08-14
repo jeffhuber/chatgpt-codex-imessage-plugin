@@ -7,7 +7,7 @@ import argparse
 import ast
 import json
 import re
-from datetime import datetime
+from datetime import date
 from pathlib import Path
 
 
@@ -70,25 +70,30 @@ def shared_core_version() -> str:
 
 
 def check_changelog(expected_version: str) -> tuple[bool, str]:
-    """Verify CHANGELOG has the expected version with today's date."""
+    """Verify CHANGELOG has exactly one dated heading for the version."""
     changelog_path = REPO_ROOT / "CHANGELOG.md"
     content = changelog_path.read_text(encoding="utf-8")
-    
-    # Extract today's date in YYYY-MM-DD format
-    from datetime import timezone
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    
-    # Look for "## X.Y.Z - YYYY-MM-DD" pattern
-    pattern = rf"^##\s+{re.escape(expected_version)}\s+-\s+(.+)$"
-    match = re.search(pattern, content, re.MULTILINE)
-    
-    if not match:
-        return False, f"CHANGELOG.md missing '## {expected_version} - {today}' entry"
-    
-    changelog_date = match.group(1).strip()
-    if changelog_date != today:
-        return False, f"CHANGELOG.md has version {expected_version} dated {changelog_date!r}, expected {today!r}"
-    
+
+    pattern = (
+        rf"^##[ \t]+{re.escape(expected_version)}[ \t]+-[ \t]+"
+        r"([^\r\n]*?)[ \t]*\r?$"
+    )
+    matches = re.findall(pattern, content, re.MULTILINE)
+    if len(matches) != 1:
+        return (
+            False,
+            f"CHANGELOG.md must contain exactly one dated heading for "
+            f"version {expected_version}; found {len(matches)}",
+        )
+
+    changelog_date = matches[0]
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", changelog_date) is None:
+        return False, f"CHANGELOG.md has invalid date {changelog_date!r}"
+    try:
+        date.fromisoformat(changelog_date)
+    except ValueError:
+        return False, f"CHANGELOG.md has invalid date {changelog_date!r}"
+
     return True, ""
 
 
@@ -101,23 +106,24 @@ def main() -> int:
     versions = {
         "helper": helper_version(),
         "plugin": plugin_version(),
-        "MCP server": assigned_version(REPO_ROOT / "plugin_server" / "server.py", "SERVER_VERSION"),
+        "MCP server": assigned_version(
+            REPO_ROOT / "plugin_server" / "server.py", "SERVER_VERSION"
+        ),
         "skill": skill_version(),
         "shared-core": shared_core_version(),
     }
-    
+
     mismatches = {name: version for name, version in versions.items() if version != expected}
     if mismatches:
         for name, version in mismatches.items():
             print(f"{name} version {version!r} does not match tag {args.tag!r}")
         return 1
-    
-    # Check CHANGELOG
+
     changelog_ok, changelog_error = check_changelog(expected)
     if not changelog_ok:
         print(changelog_error)
         return 1
-    
+
     print(f"release versions match {args.tag}")
     return 0
 
