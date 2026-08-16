@@ -642,7 +642,7 @@ class SendPolicyTests(unittest.TestCase):
     def test_send_policy_disabled_blocks_preview(self) -> None:
         """send_policy.json enabled=false blocks send_preview."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            bridge = Path(tmpdir)
+            bridge = Path(os.path.realpath(tmpdir))
             policy_dir = bridge / "policy"
             policy_dir.mkdir(mode=0o700)
             policy_file = policy_dir / "send_policy.json"
@@ -680,7 +680,7 @@ except ValueError as e:
     def test_send_policy_enabled_allows_preview(self) -> None:
         """send_policy.json enabled=true allows send_preview to mint nonce."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            bridge = Path(tmpdir)
+            bridge = Path(os.path.realpath(tmpdir))
             policy_dir = bridge / "policy"
             policy_dir.mkdir(mode=0o700)
             (bridge / "control" / "requests").mkdir(parents=True, mode=0o700)
