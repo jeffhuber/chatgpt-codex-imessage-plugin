@@ -275,7 +275,7 @@ All other arguments are **rejected** with a clear error message (e.g., `"--produ
 
 The launcher provides a **fixed environment** to the Python entry point:
 
-- `PATH=/usr/bin:/bin:/usr/sbin:/sbin`: System-only PATH (no user directories).
+- `PATH=/usr/bin:/bin`: System-only PATH (no user directories; nothing in bridge-mcp needs sbin).
 - `HOME=<user-home>`: Current user's home directory (required for `~` expansion and bridge-root discovery).
 - `LANG=en_US.UTF-8`: Predictable locale for text processing.
 - `BRIDGE_PRO_BUNDLE_ROOT=<bundle-root>`: Absolute path to the Bridge Pro `.app` bundle.
@@ -292,7 +292,7 @@ The Python entry point may read:
 
 - `BRIDGE_PRO_BUNDLE_ROOT`: Absolute path to the bundle (set by launcher).
 - `HOME`: User home directory (set by launcher).
-- `CHATGPT_CODEX_IMESSAGE_BRIDGE`: DIY mode only. If `--bridge-root` is not specified, this environment variable provides a fallback bridge-root path. **Not used in product mode.**
+- `CHATGPT_CODEX_IMESSAGE_BRIDGE`: **DIY mode only.** When `--bridge-root` is specified, this environment variable provides a fallback bridge-root path if the argument value is relative or needs expansion. **Environment-only invocation (without `--bridge-root` argument) is INVALID.** The env var is not a mode selector; DIY mode requires the `--bridge-root` argument. **Not used in product mode.**
 
 ### Security Invariants
 
