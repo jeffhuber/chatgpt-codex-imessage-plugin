@@ -172,6 +172,157 @@ class SendGateTests(unittest.TestCase):
         else:
             os.environ["COWORK_IMESSAGE_BRIDGE_DIR"] = self._old_bridge_old
 
+
+class ProductModeTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory(prefix="product-mode-test-")
+        self.addCleanup(self._tmp.cleanup)
+        self._saved_env = {}
+        for var in ("IMESSAGE_PRODUCT_ID", "IMESSAGE_POLICY_DIR", "IMESSAGE_SEND_GATE_PATH",
+                    "IMESSAGE_CONFIRM_HELPER_PATH", "COWORK_IMESSAGE_READ_POLICY"):
+            self._saved_env[var] = os.environ.get(var)
+        self.addCleanup(self._restore_env)
+
+    def _restore_env(self) -> None:
+        for var, value in self._saved_env.items():
+            if value is None:
+                os.environ.pop(var, None)
+            else:
+                os.environ[var] = value
+
+    def test_missing_read_policy_defaults_to_allowlist_in_product_mode(self) -> None:
+        """Verify that product mode defaults to allowlist when read_policy.txt is missing."""
+        policy_dir = Path(self._tmp.name)
+        policy_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Temporarily set wrapper mode to product by patching
+        old_wrapper_mode = helper.WRAPPER_MODE
+        old_policy_root = helper.POLICY_ROOT
+        old_read_policy_path = helper.READ_POLICY_PATH
+        
+        try:
+            helper.WRAPPER_MODE = "product"
+            helper.POLICY_ROOT = policy_dir
+            helper.READ_POLICY_PATH = policy_dir / "read_policy.txt"
+            
+            policy = helper.load_privacy_policy()
+            self.assertEqual(policy.mode, "allowlist")
+        finally:
+            helper.WRAPPER_MODE = old_wrapper_mode
+            helper.POLICY_ROOT = old_policy_root
+            helper.READ_POLICY_PATH = old_read_policy_path
+
+    def test_missing_read_policy_defaults_to_blocklist_in_baked_mode(self) -> None:
+        """Verify that baked mode defaults to blocklist when read_policy.txt is missing."""
+        policy_dir = Path(self._tmp.name)
+        policy_dir.mkdir(parents=True, exist_ok=True)
+        
+        old_wrapper_mode = helper.WRAPPER_MODE
+        old_policy_root = helper.POLICY_ROOT
+        old_read_policy_path = helper.READ_POLICY_PATH
+        
+        try:
+            helper.WRAPPER_MODE = "baked"
+            helper.POLICY_ROOT = policy_dir
+            helper.READ_POLICY_PATH = policy_dir / "read_policy.txt"
+            
+            policy = helper.load_privacy_policy()
+            self.assertEqual(policy.mode, "blocklist")
+        finally:
+            helper.WRAPPER_MODE = old_wrapper_mode
+            helper.POLICY_ROOT = old_policy_root
+            helper.READ_POLICY_PATH = old_read_policy_path
+
+    def test_policy_file_permission_rejection_in_product_mode(self) -> None:
+        """Verify that policy files with bad permissions are rejected in product mode."""
+        policy_dir = Path(self._tmp.name)
+        policy_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create policy file with group-writable permissions
+        blocked_file = policy_dir / "blocked_chats.txt"
+        blocked_file.write_text("+14155551234\n")
+        blocked_file.chmod(0o664)  # group-writable
+        
+        old_wrapper_mode = helper.WRAPPER_MODE
+        old_blocklist_path = helper.BLOCKLIST_PATH
+        
+        try:
+            helper.WRAPPER_MODE = "product"
+            helper.BLOCKLIST_PATH = blocked_file
+            
+            with mock.patch.object(helper, "log") as mock_log:
+                policy = helper.load_privacy_policy()
+                # Policy file should be rejected due to permissions
+                self.assertEqual(len(policy.blocklist), 0)
+                
+                # Check that log was called with permission rejection message
+                logged = " ".join(str(call.args[0]) for call in mock_log.call_args_list)
+                self.assertIn("group/world-writable", logged)
+        finally:
+            helper.WRAPPER_MODE = old_wrapper_mode
+            helper.BLOCKLIST_PATH = old_blocklist_path
+
+    def test_policy_file_accepts_correct_permissions_in_product_mode(self) -> None:
+        """Verify that policy files with correct permissions are loaded in product mode."""
+        policy_dir = Path(self._tmp.name)
+        policy_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create policy file with correct permissions
+        allowed_file = policy_dir / "allowed_chats.txt"
+        allowed_file.write_text("+14155551234\n")
+        allowed_file.chmod(0o600)
+        
+        old_wrapper_mode = helper.WRAPPER_MODE
+        old_allowlist_path = helper.ALLOWLIST_PATH
+        
+        try:
+            helper.WRAPPER_MODE = "product"
+            helper.ALLOWLIST_PATH = allowed_file
+            
+            policy = helper.load_privacy_policy()
+            self.assertEqual(len(policy.allowlist), 1)
+        finally:
+            helper.WRAPPER_MODE = old_wrapper_mode
+            helper.ALLOWLIST_PATH = old_allowlist_path
+
+    def test_action_status_includes_product_fields(self) -> None:
+        """Verify that action_status returns the new product fields."""
+        status = helper.action_status({}, None, {}, helper.load_privacy_policy())
+        
+        # Verify all required fields are present
+        self.assertIn("product_id", status)
+        self.assertIn("wrapper_mode", status)
+        self.assertIn("policy_dir", status)
+        
+        # Verify types
+        self.assertIsInstance(status["product_id"], str)
+        self.assertIsInstance(status["wrapper_mode"], str)
+        self.assertIsInstance(status["policy_dir"], str)
+        
+        # Verify wrapper_mode is valid
+        self.assertIn(status["wrapper_mode"], ("product", "baked"))
+
+
+class SendGateNonceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory(prefix="grokbot-nonce-test-")
+        self.addCleanup(self._tmp.cleanup)
+        self._old_bridge_new = os.environ.get("IMESSAGE_BRIDGE_DIR")
+        self._old_bridge_old = os.environ.get("COWORK_IMESSAGE_BRIDGE_DIR")
+        os.environ["IMESSAGE_BRIDGE_DIR"] = os.path.realpath(self._tmp.name)
+        os.environ["COWORK_IMESSAGE_BRIDGE_DIR"] = os.path.realpath(self._tmp.name)
+        self.addCleanup(self._restore_bridge)
+
+    def _restore_bridge(self) -> None:
+        if self._old_bridge_new is None:
+            os.environ.pop("IMESSAGE_BRIDGE_DIR", None)
+        else:
+            os.environ["IMESSAGE_BRIDGE_DIR"] = self._old_bridge_new
+        if self._old_bridge_old is None:
+            os.environ.pop("COWORK_IMESSAGE_BRIDGE_DIR", None)
+        else:
+            os.environ["COWORK_IMESSAGE_BRIDGE_DIR"] = self._old_bridge_old
+
     def test_nonce_round_trip_and_replay_rejection(self) -> None:
         nonce = helper.mint_send_nonce("+14155551234", "hello", "iMessage")
         nonce_path = (
