@@ -26,32 +26,32 @@ class BridgeResolutionTests(unittest.TestCase):
         env_path = "/tmp/env-bridge"
         with mock.patch.dict(os.environ, {"CHATGPT_CODEX_IMESSAGE_BRIDGE": env_path}):
             resolved = resolve_runtime_bridge()
-            self.assertEqual(resolved, pathlib.Path(env_path))
+            self.assertEqual(os.path.realpath(resolved), os.path.realpath(pathlib.Path(env_path)))
 
     def test_default_bridge_when_no_explicit_or_env(self) -> None:
         """DEFAULT_BRIDGE is used when no explicit path or env var."""
         with mock.patch.dict(os.environ, {}, clear=True):
             resolved = resolve_runtime_bridge()
             expected = pathlib.Path.home() / "Library" / "Application Support" / "ChatGPTCodexIMessage"
-            self.assertEqual(resolved, expected)
+            self.assertEqual(os.path.realpath(resolved), os.path.realpath(expected))
 
     def test_product_mode_claude(self) -> None:
         """Product mode resolves to Bridge Pro/bridges/<product-id>."""
         resolved = resolve_runtime_bridge(product="claude")
         expected = pathlib.Path.home() / "Library" / "Application Support" / "Bridge Pro" / "bridges" / "claude"
-        self.assertEqual(resolved, expected)
+        self.assertEqual(os.path.realpath(resolved), os.path.realpath(expected))
 
     def test_product_mode_grok(self) -> None:
         """Product mode grok resolves correctly."""
         resolved = resolve_runtime_bridge(product="grok")
         expected = pathlib.Path.home() / "Library" / "Application Support" / "Bridge Pro" / "bridges" / "grok"
-        self.assertEqual(resolved, expected)
+        self.assertEqual(os.path.realpath(resolved), os.path.realpath(expected))
 
     def test_product_mode_openai(self) -> None:
         """Product mode openai resolves correctly."""
         resolved = resolve_runtime_bridge(product="openai")
         expected = pathlib.Path.home() / "Library" / "Application Support" / "Bridge Pro" / "bridges" / "openai"
-        self.assertEqual(resolved, expected)
+        self.assertEqual(os.path.realpath(resolved), os.path.realpath(expected))
 
     def test_product_and_explicit_path_are_mutually_exclusive(self) -> None:
         """Providing both --product and --bridge-root raises ValueError."""
@@ -79,25 +79,25 @@ class BridgeClientBackwardCompatTests(unittest.TestCase):
     def test_bridge_client_explicit_path(self) -> None:
         """BridgeClient accepts explicit bridge_root."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            bridge = pathlib.Path(tmpdir)
+            bridge = pathlib.Path(os.path.realpath(tmpdir))
             client = BridgeClient(bridge_root=bridge)
-            self.assertEqual(client.bridge_root, bridge)
-            self.assertEqual(client.requests, bridge / "control" / "requests")
-            self.assertEqual(client.responses, bridge / "control" / "responses")
+            self.assertEqual(os.path.realpath(client.bridge_root), os.path.realpath(bridge))
+            self.assertEqual(os.path.realpath(client.requests), os.path.realpath(bridge / "control" / "requests"))
+            self.assertEqual(os.path.realpath(client.responses), os.path.realpath(bridge / "control" / "responses"))
 
     def test_bridge_client_env_fallback(self) -> None:
         """BridgeClient uses CHATGPT_CODEX_IMESSAGE_BRIDGE env when no explicit path."""
         env_path = "/tmp/env-bridge"
         with mock.patch.dict(os.environ, {"CHATGPT_CODEX_IMESSAGE_BRIDGE": env_path}):
             client = BridgeClient()
-            self.assertEqual(client.bridge_root, pathlib.Path(env_path))
+            self.assertEqual(os.path.realpath(client.bridge_root), os.path.realpath(pathlib.Path(env_path)))
 
     def test_bridge_client_default_fallback(self) -> None:
         """BridgeClient uses DEFAULT_BRIDGE when no path or env."""
         with mock.patch.dict(os.environ, {}, clear=True):
             client = BridgeClient()
             expected = pathlib.Path.home() / "Library" / "Application Support" / "ChatGPTCodexIMessage"
-            self.assertEqual(client.bridge_root, expected)
+            self.assertEqual(os.path.realpath(client.bridge_root), os.path.realpath(expected))
 
 
 class ReexportTests(unittest.TestCase):
@@ -117,9 +117,9 @@ class ReexportTests(unittest.TestCase):
         from plugin_server.bridge import BridgeClient
         
         with tempfile.TemporaryDirectory() as tmpdir:
-            bridge = pathlib.Path(tmpdir)
+            bridge = pathlib.Path(os.path.realpath(tmpdir))
             client = BridgeClient(bridge_root=bridge)
-            self.assertEqual(client.bridge_root, bridge)
+            self.assertEqual(os.path.realpath(client.bridge_root), os.path.realpath(bridge))
 
 
 if __name__ == "__main__":
