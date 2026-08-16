@@ -43,6 +43,7 @@ PRODUCT_DEFINES=(
   -DPYTHON_RELPATH='"Versions/A/Python"'
   -DIMESSAGE_BUNDLE_ID='"com.test.bridgepro"'
   -DIMESSAGE_CONFIRM_BUNDLE_ID='"com.test.bridgepro.confirm"'
+  -DIMESSAGE_PYTHON_BUNDLE_ID='"org.python.python"'
   -DIMESSAGE_TEAM_ID='"TESTTEAMID"'
   -DHELPER_DISPLAY_NAME='"test-helper"'
 )
@@ -50,6 +51,7 @@ PRODUCT_DEFINES=(
 PRODUCT_TEST_REQUIREMENT_DEFINES=(
   '-DIMESSAGE_BUNDLE_REQUIREMENT="identifier \"com.test.bridgepro\""'
   '-DIMESSAGE_CONFIRM_REQUIREMENT="identifier \"com.test.bridgepro.confirm\""'
+  '-DIMESSAGE_PYTHON_REQUIREMENT="identifier \"org.python.python\""'
 )
 
 PRODUCT_LINK_FLAGS=()
@@ -422,11 +424,31 @@ fi
 echo "✓ Tampered sealed bundle rejected with exit 10"
 echo
 
-# Re-seal the bundle, then tamper with the separately validated confirm helper.
+# Re-seal the bundle, then tamper with the separately validated Python leaf.
 printf "" > "$BUNDLE_PATH/Contents/Resources/core/bin/helper.py"
 codesign --force --sign - --identifier com.test.bridgepro "$BUNDLE_PATH" >/dev/null
 
-echo "Test 18: Product validate-only rejects confirm helper tampering"
+echo "Test 18: Product validate-only rejects Python interpreter tampering"
+printf "tamper" >> "$BUNDLE_PATH/Contents/Frameworks/Python.framework/Versions/A/Python"
+set +e
+"$BUNDLE_PATH/Contents/Helpers/test-helper" --product openai --validate-only >/dev/null 2>&1
+exit_code=$?
+set -e
+if [ $exit_code -ne 10 ]; then
+  echo "✗ FAIL: Tampered Python interpreter should exit 10, got $exit_code"
+  exit 1
+fi
+echo "✓ Tampered Python interpreter rejected with exit 10"
+echo
+
+# Restore Python and the bundle, then tamper with imessage-confirm.
+clang -Wall -Wextra -Werror -O2 -o "$BUNDLE_PATH/Contents/Frameworks/Python.framework/Versions/A/Python" "$TEMP_DIR/python.c"
+chmod 700 "$BUNDLE_PATH/Contents/Frameworks/Python.framework/Versions/A/Python"
+codesign --force --sign - --identifier org.python.python \
+  "$BUNDLE_PATH/Contents/Frameworks/Python.framework" >/dev/null
+codesign --force --sign - --identifier com.test.bridgepro "$BUNDLE_PATH" >/dev/null
+
+echo "Test 19: Product validate-only rejects confirm helper tampering"
 printf "tamper" >> "$BUNDLE_PATH/Contents/Helpers/imessage-confirm"
 set +e
 "$BUNDLE_PATH/Contents/Helpers/test-helper" --product openai --validate-only >/dev/null 2>&1

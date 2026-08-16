@@ -106,6 +106,10 @@ extern int _NSGetExecutablePath(char *buf, uint32_t *bufsize);
 #error "IMESSAGE_CONFIRM_BUNDLE_ID must be defined for product build"
 #endif
 
+#ifndef IMESSAGE_PYTHON_BUNDLE_ID
+#error "IMESSAGE_PYTHON_BUNDLE_ID must be defined for product build"
+#endif
+
 #ifndef IMESSAGE_TEAM_ID
 #error "IMESSAGE_TEAM_ID must be defined for product build"
 #endif
@@ -116,6 +120,10 @@ extern int _NSGetExecutablePath(char *buf, uint32_t *bufsize);
 
 #ifndef IMESSAGE_CONFIRM_REQUIREMENT
 #define IMESSAGE_CONFIRM_REQUIREMENT ""
+#endif
+
+#ifndef IMESSAGE_PYTHON_REQUIREMENT
+#define IMESSAGE_PYTHON_REQUIREMENT ""
 #endif
 #endif
 
@@ -641,6 +649,11 @@ int main(int argc, char **argv) {
     ret = validate_code_requirement(confirm_helper, "confirm helper",
                                     IMESSAGE_CONFIRM_BUNDLE_ID,
                                     IMESSAGE_CONFIRM_REQUIREMENT, false, false);
+    if (ret != 0) return ret;
+
+    ret = validate_code_requirement(python_interp, "Python interpreter",
+                                    IMESSAGE_PYTHON_BUNDLE_ID,
+                                    IMESSAGE_PYTHON_REQUIREMENT, false, false);
     if (ret != 0) return ret;
 
     if (validate_only) {
