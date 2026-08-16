@@ -7,9 +7,11 @@
  *
  * Dual-mode build:
  * - Baked mode (default): Compile with -DHELPER_SCRIPT, -DSEND_GATE_SCRIPT,
- *   -DCONFIRM_HELPER, -DBRIDGE_ROOT. Paths are baked at compile time.
+ *   -DCONFIRM_HELPER, -DBRIDGE_ROOT. Paths are baked at compile time and the
+ *   exec arguments stay byte-identical with the pre-product wrapper.
  * - Product mode: Compile with -DIMESSAGE_PRODUCT_BUILD=1. Paths resolved
- *   at runtime via --product <id> CLI. Requires product allowlist match.
+ *   at runtime via --product <id> CLI. Requires product allowlist match and
+ *   runs the bundled interpreter with -I -B.
  */
 
 #include <errno.h>
@@ -134,6 +136,12 @@ static void print_usage(const char *display_name) {
     fprintf(stderr, "Usage: %s --product <id> [--validate-only]\n", display_name);
 }
 
+/*
+ * Product validation exit codes:
+ * 2 = required artifact missing, 3 = symlink/non-regular artifact,
+ * 4 = owner mismatch, 5 = group/world writable, 7 = env too long,
+ * 8 = CLI/allowlist usage error, 9 = bundle/home discovery failure.
+ */
 static int validate_ownership(const char *path, const char *label, uid_t current_uid,
                                uid_t bundle_owner, bool reject_symlink) {
     struct stat st;
@@ -409,7 +417,8 @@ int main(int argc, char **argv) {
 
     char tmpdir[PATH_MAX];
 #ifdef __APPLE__
-    if (confstr(_CS_DARWIN_USER_TEMP_DIR, tmpdir, sizeof(tmpdir)) == 0) {
+    size_t tmpdir_len = confstr(_CS_DARWIN_USER_TEMP_DIR, tmpdir, sizeof(tmpdir));
+    if (tmpdir_len == 0 || tmpdir_len > sizeof(tmpdir)) {
         strcpy(tmpdir, "/tmp");
     } else {
         size_t len = strlen(tmpdir);

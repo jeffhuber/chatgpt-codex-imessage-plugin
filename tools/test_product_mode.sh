@@ -1,7 +1,8 @@
 #!/bin/bash
 # Test script for CORE-2 and CORE-3: dual-mode wrapper build, product allowlist, and path derivation
-# CORE-2 acceptance: Baked-mode behavior byte-identical; product mode rejects
-# `--product /tmp/x`, `Claude`, extra args with exit 8 and no exec
+# CORE-2 acceptance: Baked-mode behavior byte-identical; product mode runs the
+# bundled interpreter with -I -B and rejects `--product /tmp/x`, `Claude`, and
+# extra args with exit 8 and no exec.
 # CORE-3 acceptance: --validate-only prints distinct roots for four ids
 
 set -euo pipefail
@@ -232,7 +233,7 @@ TEMP_DIR=$(mktemp -d)
 BUNDLE_PATH="$TEMP_DIR/TestApp.app"
 mkdir -p "$BUNDLE_PATH/Contents/Helpers"
 mkdir -p "$BUNDLE_PATH/Contents/Resources/core/bin"
-mkdir -p "$BUNDLE_PATH/Contents/Resources/Python.app/Contents/MacOS"
+mkdir -p "$BUNDLE_PATH/Contents/Frameworks/Python.framework/Resources/Python.app/Contents/MacOS"
 
 # Create Info.plist
 echo '<?xml version="1.0" encoding="UTF-8"?>
@@ -248,7 +249,7 @@ echo '<?xml version="1.0" encoding="UTF-8"?>
 touch "$BUNDLE_PATH/Contents/Resources/core/bin/helper.py"
 touch "$BUNDLE_PATH/Contents/Resources/core/bin/send_gate.py"
 touch "$BUNDLE_PATH/Contents/Helpers/imessage-confirm"
-touch "$BUNDLE_PATH/Contents/Resources/Python.app/Contents/MacOS/Python"
+touch "$BUNDLE_PATH/Contents/Frameworks/Python.framework/Resources/Python.app/Contents/MacOS/Python"
 
 # Compile product-mode helper into the bundle
 clang -Wall -Wextra -Werror -O2 \
