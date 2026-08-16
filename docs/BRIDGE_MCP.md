@@ -57,7 +57,7 @@ Vendoring `mcp` is documented as the **non-default fallback** for users who choo
 
 **Allowed modules:**
 - Python 3.10+ standard library (no third-party packages)
-- Existing local modules: `plugin_server.bridge.BridgeClient`, `plugin_server.bridge.BridgeError`
+- The bridge client, today `plugin_server/bridge.py`, extracted to `bridge_mcp/client.py` by MCP-2; product mode imports only from `bridge_mcp/`
 
 **Rationale:**
 - Minimal binary size for the signed `.app` bundle
@@ -170,7 +170,7 @@ This is macOS-only.
    - Pass through all arguments from the launcher invocation
 
 5. **Fixed environment:** Replace the environment with only these variables:
-   - `PATH`: `/usr/bin:/bin:/usr/sbin:/sbin` (system-only, no user paths)
+   - `PATH`: `/usr/bin:/bin` (system-only, no user paths; nothing in bridge-mcp needs sbin)
    - `HOME`: Current user's home directory (required for bridge-root discovery)
    - `LANG`: `en_US.UTF-8` (predictable locale)
    - `BRIDGE_PRO_BUNDLE_ROOT`: Absolute path to `<bundle-root>`
@@ -237,7 +237,7 @@ The `host-assets` subcommand manages MCP plugin manifests for ChatGPT, Codex, an
 ### Path Restrictions
 
 - **Manifest destination:** Must be `~/.agents/plugins/marketplace.json` (no other paths accepted).
-- **Plugin directory:** Must be `~/plugins/<plugin-name>/` (no other paths accepted).
+- **Plugin directory:** Must be `~/plugins/<plugin-name>/` (no other paths accepted). MCP-5 will re-verify against `~/.codex/plugins` if that path becomes canonical.
 - **Command path:** Must be an absolute path within the Bridge Pro bundle (`/Applications/Bridge Pro.app/Contents/MacOS/bridge-mcp` or similar).
 - **No user paths in product mode:** The `--product openai` mode must not accept caller-controlled paths. Only `--bridge-root <path>` (DIY mode) allows custom paths.
 
@@ -314,8 +314,8 @@ The `--transport launchd` flag is accepted but is the default and does not need 
 
 ### Reserved Transports (S2 Spike)
 
-- **`direct`**: Direct Python subprocess invocation. Reserved for future use.
-- **`socket`**: Unix domain socket IPC. Reserved for future use.
+- **`direct`**: Direct Python subprocess invocation. Reserved for S2 spike. S2 arms 1/2 (docs/spikes/s2-arms-1-3.md in bridge-pro) found that a host-exec'd wrapper is TCC-attributed to the host, so `direct` is on track to be refused.
+- **`socket`**: Unix domain socket IPC. Reserved for S2 spike (arm 4 still open).
 
 The `--transport direct` and `--transport socket` flags are **accepted for forward compatibility** but will fail at runtime with a clear error message: `"direct/socket transports are reserved for the S2 spike; use launchd (default) for now"`.
 
