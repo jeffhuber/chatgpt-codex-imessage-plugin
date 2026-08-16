@@ -180,6 +180,11 @@ static int validate_ownership(const char *path, const char *label, uid_t current
                 HELPER_DISPLAY_NAME, label, path);
         return 6;
     }
+    if (require_executable && access(path, X_OK) != 0) {
+        fprintf(stderr, "%s: %s %s is not executable by current user; refusing (%s)\n",
+                HELPER_DISPLAY_NAME, label, path, strerror(errno));
+        return 6;
+    }
     return 0;
 }
 
@@ -204,6 +209,48 @@ static int format_path(char *buffer, size_t size, const char *label,
         return 7;
     }
     return 0;
+}
+
+static void print_json_string(const char *value) {
+    putchar('"');
+    for (const unsigned char *p = (const unsigned char *)value; *p; p++) {
+        switch (*p) {
+            case '"':
+                fputs("\\\"", stdout);
+                break;
+            case '\\':
+                fputs("\\\\", stdout);
+                break;
+            case '\b':
+                fputs("\\b", stdout);
+                break;
+            case '\f':
+                fputs("\\f", stdout);
+                break;
+            case '\n':
+                fputs("\\n", stdout);
+                break;
+            case '\r':
+                fputs("\\r", stdout);
+                break;
+            case '\t':
+                fputs("\\t", stdout);
+                break;
+            default:
+                if (*p < 0x20) {
+                    printf("\\u%04x", *p);
+                } else {
+                    putchar(*p);
+                }
+        }
+    }
+    putchar('"');
+}
+
+static void print_json_field(const char *name, const char *value) {
+    print_json_string(name);
+    putchar(':');
+    print_json_string(value);
 }
 
 static int get_bundle_path(char *bundle_path, size_t bundle_path_size) {
@@ -440,13 +487,25 @@ int main(int argc, char **argv) {
     if (ret != 0) return ret;
 
     if (validate_only) {
-        printf("{\"product\":\"%s\",\"role\":\"%s\",\"bridge_root\":\"%s\"",
-               entry->product_id, entry->role, bridge_root);
+        putchar('{');
+        print_json_field("product", entry->product_id);
+        putchar(',');
+        print_json_field("role", entry->role);
+        putchar(',');
+        print_json_field("bridge_root", bridge_root);
         if (is_host) {
-            printf(",\"policy_dir\":\"%s\"", policy_dir);
+            putchar(',');
+            print_json_field("policy_dir", policy_dir);
         }
-        printf(",\"helper_py\":\"%s\",\"send_gate_py\":\"%s\",\"confirm_helper\":\"%s\",\"python_interp\":\"%s\"}\n",
-               helper_py, send_gate_py, confirm_helper, python_interp);
+        putchar(',');
+        print_json_field("helper_py", helper_py);
+        putchar(',');
+        print_json_field("send_gate_py", send_gate_py);
+        putchar(',');
+        print_json_field("confirm_helper", confirm_helper);
+        putchar(',');
+        print_json_field("python_interp", python_interp);
+        puts("}");
         return 0;
     }
 

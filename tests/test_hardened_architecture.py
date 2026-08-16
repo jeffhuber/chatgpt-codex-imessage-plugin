@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import importlib.util
 import shutil
@@ -191,6 +192,74 @@ class WrapperValidationTests(unittest.TestCase):
             "snprintf(info_plist",
         ):
             self.assertNotIn(raw_target, source)
+
+    def test_product_validate_only_escapes_json_paths(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="grokbot-json-path-test-") as td:
+            root = Path(td)
+            bundle = root / 'Test "Bridge\\App.app'
+            helpers = bundle / "Contents" / "Helpers"
+            core_bin = bundle / "Contents" / "Resources" / "core" / "bin"
+            python_bin = (
+                bundle
+                / "Contents"
+                / "Frameworks"
+                / "Python.framework"
+                / "Resources"
+                / "Python.app"
+                / "Contents"
+                / "MacOS"
+            )
+            helpers.mkdir(parents=True)
+            core_bin.mkdir(parents=True)
+            python_bin.mkdir(parents=True)
+            (bundle / "Contents" / "Info.plist").write_text(
+                "<plist><dict></dict></plist>"
+            )
+            (core_bin / "helper.py").write_text("# helper\n")
+            (core_bin / "send_gate.py").write_text("# send gate\n")
+            confirmation = helpers / "imessage-confirm"
+            python = python_bin / "Python"
+            confirmation.write_text("#!/bin/sh\nexit 0\n")
+            python.write_text("#!/bin/sh\nexit 0\n")
+            confirmation.chmod(0o700)
+            python.chmod(0o700)
+            wrapper = helpers / "test-helper"
+
+            compile_result = subprocess.run(
+                [
+                    "clang",
+                    "-Wall",
+                    "-Wextra",
+                    "-Werror",
+                    "-O2",
+                    "-DIMESSAGE_PRODUCT_BUILD=1",
+                    '-DAPP_SUPPORT_DIRNAME="TestBridgePro"',
+                    '-DPYTHON_RELPATH="Resources/Python.app/Contents/MacOS/Python"',
+                    '-DHELPER_DISPLAY_NAME="test-helper"',
+                    "-o",
+                    str(wrapper),
+                    str(REPO_ROOT / "bin" / "imessage_helper.c"),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(compile_result.returncode, 0, compile_result.stderr)
+
+            result = subprocess.run(
+                [str(wrapper), "--product", "openai", "--validate-only"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(
+            payload["helper_py"],
+            os.path.realpath(core_bin / "helper.py"),
+        )
+        self.assertIn('Test "Bridge\\App.app', payload["helper_py"])
 
     def test_wrapper_validates_every_loaded_component(self) -> None:
         with tempfile.TemporaryDirectory(prefix="grokbot-wrapper-test-") as td:

@@ -337,4 +337,19 @@ chmod 700 "$BUNDLE_PATH/Contents/Frameworks/Python.framework/Resources/Python.ap
 echo "✓ Non-executable Python rejected with exit 6"
 echo
 
+# Test 16: Validation rejects executables the current user cannot run
+echo "Test 16: Product validate-only rejects inaccessible execute bits"
+chmod 001 "$BUNDLE_PATH/Contents/Frameworks/Python.framework/Resources/Python.app/Contents/MacOS/Python"
+set +e
+"$BUNDLE_PATH/Contents/Helpers/test-helper" --product claude --validate-only >/dev/null 2>&1
+exit_code=$?
+set -e
+if [ $exit_code -ne 6 ]; then
+  echo "✗ FAIL: Inaccessible execute bit should exit 6, got $exit_code"
+  exit 1
+fi
+chmod 700 "$BUNDLE_PATH/Contents/Frameworks/Python.framework/Resources/Python.app/Contents/MacOS/Python"
+echo "✓ Inaccessible execute bit rejected with exit 6"
+echo
+
 echo "=== All CORE-2 + CORE-3 tests passed ==="
