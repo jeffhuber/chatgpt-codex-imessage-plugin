@@ -28,6 +28,8 @@
 #ifdef IMESSAGE_PRODUCT_BUILD
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
+#else
+extern int _NSGetExecutablePath(char *buf, uint32_t *bufsize);
 #endif
 #endif
 
@@ -84,11 +86,11 @@
 
 #ifdef IMESSAGE_PRODUCT_BUILD
 #ifndef APP_SUPPORT_DIRNAME
-#define APP_SUPPORT_DIRNAME "BridgePro"
+#error "APP_SUPPORT_DIRNAME must be defined for product build"
 #endif
 
 #ifndef PYTHON_RELPATH
-#define PYTHON_RELPATH "Versions/Current/bin/python3"
+#error "PYTHON_RELPATH must be defined for product build"
 #endif
 #endif
 
@@ -177,22 +179,11 @@ static int set_env_value(char *buffer, size_t size, const char *name,
 
 static int get_bundle_path(char *bundle_path, size_t bundle_path_size) {
     char exe_path[PATH_MAX];
-    
-#ifdef __APPLE__
     uint32_t size = sizeof(exe_path);
     if (_NSGetExecutablePath(exe_path, &size) != 0) {
         fprintf(stderr, "%s: executable path too long\n", HELPER_DISPLAY_NAME);
         return 9;
     }
-#else
-    ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
-    if (len == -1) {
-        fprintf(stderr, "%s: cannot read executable path: %s\n", 
-                HELPER_DISPLAY_NAME, strerror(errno));
-        return 9;
-    }
-    exe_path[len] = '\0';
-#endif
 
     char real_path[PATH_MAX];
     if (realpath(exe_path, real_path) == NULL) {
@@ -201,7 +192,11 @@ static int get_bundle_path(char *bundle_path, size_t bundle_path_size) {
         return 9;
     }
 
-    char *base = basename(real_path);
+    char real_path_copy[PATH_MAX];
+    strncpy(real_path_copy, real_path, sizeof(real_path_copy) - 1);
+    real_path_copy[sizeof(real_path_copy) - 1] = '\0';
+
+    char *base = basename(real_path_copy);
     size_t base_len = strlen(base);
     size_t real_len = strlen(real_path);
     const char *expected_suffix = "/Contents/Helpers/";
@@ -389,17 +384,6 @@ int main(int argc, char **argv) {
     snprintf(python_interp, sizeof(python_interp),
              "%s/Contents/Frameworks/Python.framework/%s", bundle_path, PYTHON_RELPATH);
 
-    if (validate_only) {
-        printf("{\"product\":\"%s\",\"role\":\"%s\",\"bridge_root\":\"%s\"",
-               entry->product_id, entry->role, bridge_root);
-        if (is_host) {
-            printf(",\"policy_dir\":\"%s\"", policy_dir);
-        }
-        printf(",\"helper_py\":\"%s\",\"send_gate_py\":\"%s\",\"confirm_helper\":\"%s\",\"python_interp\":\"%s\"}\n",
-               helper_py, send_gate_py, confirm_helper, python_interp);
-        return 0;
-    }
-
     ret = validate_ownership(helper_py, "helper.py", current_uid, bundle_owner, true);
     if (ret != 0) return ret;
 
@@ -412,6 +396,17 @@ int main(int argc, char **argv) {
     ret = validate_ownership(python_interp, "Python interpreter", current_uid, bundle_owner, true);
     if (ret != 0) return ret;
 
+    if (validate_only) {
+        printf("{\"product\":\"%s\",\"role\":\"%s\",\"bridge_root\":\"%s\"",
+               entry->product_id, entry->role, bridge_root);
+        if (is_host) {
+            printf(",\"policy_dir\":\"%s\"", policy_dir);
+        }
+        printf(",\"helper_py\":\"%s\",\"send_gate_py\":\"%s\",\"confirm_helper\":\"%s\",\"python_interp\":\"%s\"}\n",
+               helper_py, send_gate_py, confirm_helper, python_interp);
+        return 0;
+    }
+
     char tmpdir[PATH_MAX];
 #ifdef __APPLE__
     if (confstr(_CS_DARWIN_USER_TEMP_DIR, tmpdir, sizeof(tmpdir)) == 0) {
@@ -423,17 +418,7 @@ int main(int argc, char **argv) {
         }
     }
 #else
-    const char *tmpenv = getenv("TMPDIR");
-    if (tmpenv && tmpenv[0]) {
-        strncpy(tmpdir, tmpenv, sizeof(tmpdir) - 1);
-        tmpdir[sizeof(tmpdir) - 1] = '\0';
-        size_t len = strlen(tmpdir);
-        if (len > 0 && tmpdir[len - 1] == '/') {
-            tmpdir[len - 1] = '\0';
-        }
-    } else {
-        strcpy(tmpdir, "/tmp");
-    }
+    strcpy(tmpdir, "/tmp");
 #endif
 
     static char env_path[] = "PATH=/usr/bin:/bin";
@@ -596,7 +581,6 @@ int main(int argc, char **argv) {
     char *exec_argv[] = {
         (char *)PYTHON_INTERPRETER,
         "-I",
-        "-B",
         (char *)HELPER_SCRIPT,
         NULL,
     };
