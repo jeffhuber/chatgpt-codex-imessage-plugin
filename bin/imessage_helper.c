@@ -171,8 +171,9 @@ static void print_usage(const char *display_name) {
  * Product validation exit codes:
  * 2 = required artifact missing, 3 = symlink/non-regular artifact,
  * 4 = owner mismatch, 5 = group/world writable, 6 = not executable,
- * 7 = derived path/env too long,
- * 8 = CLI/allowlist usage error, 9 = bundle/home discovery failure.
+     * 7 = derived path/env too long,
+     * 8 = CLI/allowlist usage error, 9 = bundle/home discovery failure,
+     * 10 = code signature / seal validation failure.
  */
 static int validate_ownership(const char *path, const char *label, uid_t current_uid,
                                uid_t bundle_owner, bool reject_symlink,
@@ -219,7 +220,7 @@ static int validate_ownership(const char *path, const char *label, uid_t current
     return 0;
 }
 
-#ifdef __APPLE__
+#if defined(IMESSAGE_PRODUCT_BUILD) && defined(__APPLE__)
 static void print_cf_error(const char *label, OSStatus status, CFErrorRef error) {
     fprintf(stderr, "%s: %s code signature validation failed (%d)",
             HELPER_DISPLAY_NAME, label, (int)status);
@@ -295,13 +296,9 @@ static int validate_code_requirement(const char *path, const char *label,
 
     SecCSFlags flags =
         kSecCSStrictValidate | kSecCSCheckAllArchitectures | kSecCSNoNetworkAccess;
-#ifdef IMESSAGE_CHECK_NESTED_CODE
     if (check_nested) {
         flags |= kSecCSCheckNestedCode;
     }
-#else
-    (void)check_nested;
-#endif
 
     CFErrorRef error = NULL;
     status = SecStaticCodeCheckValidityWithErrors(code, flags, requirement, &error);
