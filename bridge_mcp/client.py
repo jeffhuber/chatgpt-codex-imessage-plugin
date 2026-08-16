@@ -11,11 +11,8 @@ import uuid
 from typing import Any
 
 # Product layout: ~/Library/Application Support/Bridge Pro/bridges/<product-id>
-LAYOUT = {
-    "claude": "claude-desktop",
-    "grok": "grok",
-    "openai": "chatgpt-codex",
-}
+LAYOUT = pathlib.Path("Library") / "Application Support" / "Bridge Pro" / "bridges"
+PRODUCT_IDS = ("claude", "grok", "openai")
 
 # DIY default: ~/Library/Application Support/ChatGPTCodexIMessage
 DEFAULT_BRIDGE = pathlib.Path.home() / "Library" / "Application Support" / "ChatGPTCodexIMessage"
@@ -112,10 +109,9 @@ def resolve_runtime_bridge(
         raise ValueError("--bridge-root is mutually exclusive with --product")
     
     if product:
-        if product not in LAYOUT:
-            raise ValueError(f"Unknown product: {product}; expected one of {list(LAYOUT.keys())}")
-        product_id = LAYOUT[product]
-        return pathlib.Path.home() / "Library" / "Application Support" / "Bridge Pro" / "bridges" / product_id
+        if product not in PRODUCT_IDS:
+            raise ValueError(f"Unknown product: {product}; expected one of {list(PRODUCT_IDS)}")
+        return pathlib.Path.home() / LAYOUT / product
     
     if explicit_path:
         return _absolute_preserving_links(pathlib.Path(explicit_path))
