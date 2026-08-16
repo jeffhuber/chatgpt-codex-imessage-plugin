@@ -250,6 +250,8 @@ touch "$BUNDLE_PATH/Contents/Resources/core/bin/helper.py"
 touch "$BUNDLE_PATH/Contents/Resources/core/bin/send_gate.py"
 touch "$BUNDLE_PATH/Contents/Helpers/imessage-confirm"
 touch "$BUNDLE_PATH/Contents/Frameworks/Python.framework/Resources/Python.app/Contents/MacOS/Python"
+chmod 700 "$BUNDLE_PATH/Contents/Helpers/imessage-confirm"
+chmod 700 "$BUNDLE_PATH/Contents/Frameworks/Python.framework/Resources/Python.app/Contents/MacOS/Python"
 
 # Compile product-mode helper into the bundle
 clang -Wall -Wextra -Werror -O2 \
@@ -318,6 +320,21 @@ if ! echo "$output" | grep -q "\"python_interp\":\".*Python.app/Contents/MacOS/P
   exit 1
 fi
 echo "✓ Bundle-relative paths resolved correctly"
+echo
+
+# Test 15: Validation rejects non-executable interpreter
+echo "Test 15: Product validate-only rejects non-executable Python"
+chmod 600 "$BUNDLE_PATH/Contents/Frameworks/Python.framework/Resources/Python.app/Contents/MacOS/Python"
+set +e
+"$BUNDLE_PATH/Contents/Helpers/test-helper" --product claude --validate-only >/dev/null 2>&1
+exit_code=$?
+set -e
+if [ $exit_code -ne 6 ]; then
+  echo "✗ FAIL: Non-executable Python should exit 6, got $exit_code"
+  exit 1
+fi
+chmod 700 "$BUNDLE_PATH/Contents/Frameworks/Python.framework/Resources/Python.app/Contents/MacOS/Python"
+echo "✓ Non-executable Python rejected with exit 6"
 echo
 
 echo "=== All CORE-2 + CORE-3 tests passed ==="

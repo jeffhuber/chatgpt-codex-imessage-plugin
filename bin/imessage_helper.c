@@ -139,11 +139,13 @@ static void print_usage(const char *display_name) {
 /*
  * Product validation exit codes:
  * 2 = required artifact missing, 3 = symlink/non-regular artifact,
- * 4 = owner mismatch, 5 = group/world writable, 7 = env too long,
+ * 4 = owner mismatch, 5 = group/world writable, 6 = not executable,
+ * 7 = env too long,
  * 8 = CLI/allowlist usage error, 9 = bundle/home discovery failure.
  */
 static int validate_ownership(const char *path, const char *label, uid_t current_uid,
-                               uid_t bundle_owner, bool reject_symlink) {
+                               uid_t bundle_owner, bool reject_symlink,
+                               bool require_executable) {
     struct stat st;
     if (lstat(path, &st) != 0) {
         fprintf(stderr, "%s: %s missing at %s (%s)\n", HELPER_DISPLAY_NAME,
@@ -171,6 +173,11 @@ static int validate_ownership(const char *path, const char *label, uid_t current
                 HELPER_DISPLAY_NAME, label, path, (unsigned int)st.st_uid,
                 (unsigned int)current_uid, (unsigned int)bundle_owner);
         return 4;
+    }
+    if (require_executable && !(st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH))) {
+        fprintf(stderr, "%s: %s %s is not executable; refusing\n",
+                HELPER_DISPLAY_NAME, label, path);
+        return 6;
     }
     return 0;
 }
@@ -392,16 +399,16 @@ int main(int argc, char **argv) {
     snprintf(python_interp, sizeof(python_interp),
              "%s/Contents/Frameworks/Python.framework/%s", bundle_path, PYTHON_RELPATH);
 
-    ret = validate_ownership(helper_py, "helper.py", current_uid, bundle_owner, true);
+    ret = validate_ownership(helper_py, "helper.py", current_uid, bundle_owner, true, false);
     if (ret != 0) return ret;
 
-    ret = validate_ownership(send_gate_py, "send_gate.py", current_uid, bundle_owner, true);
+    ret = validate_ownership(send_gate_py, "send_gate.py", current_uid, bundle_owner, true, false);
     if (ret != 0) return ret;
 
-    ret = validate_ownership(confirm_helper, "confirm helper", current_uid, bundle_owner, true);
+    ret = validate_ownership(confirm_helper, "confirm helper", current_uid, bundle_owner, true, true);
     if (ret != 0) return ret;
 
-    ret = validate_ownership(python_interp, "Python interpreter", current_uid, bundle_owner, true);
+    ret = validate_ownership(python_interp, "Python interpreter", current_uid, bundle_owner, true, true);
     if (ret != 0) return ret;
 
     if (validate_only) {

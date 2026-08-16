@@ -74,7 +74,14 @@ ALLOWLIST_PATH = Path(
     )
 )
 READ_POLICY_PATH = BRIDGE_ROOT / "contacts" / "read_policy.txt"
-CONFIRM_HELPER_PATH = CODE_ROOT / "bin" / "chatgpt-codex-imessage-confirm"
+CONFIRM_HELPER_PATH = Path(
+    os.path.abspath(
+        os.path.expanduser(
+            os.environ.get("IMESSAGE_CONFIRM_HELPER_PATH")
+            or str(CODE_ROOT / "bin" / "chatgpt-codex-imessage-confirm")
+        )
+    )
+)
 CHAT_DB_PATH = Path.home() / "Library" / "Messages" / "chat.db"
 HOST_DISPLAY_NAME = os.environ.get("IMESSAGE_HOST_DISPLAY_NAME", "ChatGPT/Codex")
 
