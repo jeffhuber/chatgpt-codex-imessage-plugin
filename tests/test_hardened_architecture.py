@@ -182,6 +182,7 @@ class WrapperValidationTests(unittest.TestCase):
         source = (REPO_ROOT / "bin" / "imessage_helper.c").read_text()
 
         self.assertIn("static int format_path", source)
+        self.assertIn("bundle_owner != current_uid && bundle_owner != 0", source)
         for raw_target in (
             "snprintf(bridge_root",
             "snprintf(policy_dir",
@@ -193,6 +194,7 @@ class WrapperValidationTests(unittest.TestCase):
         ):
             self.assertNotIn(raw_target, source)
 
+    @unittest.skipUnless(sys.platform == "darwin", "product bundle runtime is macOS-only")
     def test_product_validate_only_escapes_json_paths(self) -> None:
         with tempfile.TemporaryDirectory(prefix="grokbot-json-path-test-") as td:
             root = Path(td)

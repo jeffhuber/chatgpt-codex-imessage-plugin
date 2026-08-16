@@ -431,6 +431,13 @@ int main(int argc, char **argv) {
         return 9;
     }
     uid_t bundle_owner = bundle_st.st_uid;
+    if (bundle_owner != current_uid && bundle_owner != 0) {
+        fprintf(stderr,
+                "%s: bundle owner %u is neither current user %u nor root; refusing\n",
+                HELPER_DISPLAY_NAME, (unsigned int)bundle_owner,
+                (unsigned int)current_uid);
+        return 4;
+    }
 
     struct passwd *pw = getpwuid(current_uid);
     if (!pw || !pw->pw_dir) {
