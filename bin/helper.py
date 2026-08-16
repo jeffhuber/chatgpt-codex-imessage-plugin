@@ -143,7 +143,7 @@ ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
 def bridge_role() -> str:
     """Return the configured bridge role (unvalidated; see allowed_actions)."""
     value = os.environ.get(_BRIDGE_ROLE_ENV, "")
-    return value.strip() or DEFAULT_BRIDGE_ROLE
+    return value.strip().lower() or DEFAULT_BRIDGE_ROLE
 
 
 def allowed_actions(role: str | None = None) -> tuple[str, ...]:

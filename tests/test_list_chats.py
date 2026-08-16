@@ -366,6 +366,11 @@ class RoleGateTests(_FixtureMixin, unittest.TestCase):
         self.assertEqual(resp["chat_count"], 3)
         self.assertNotIn(TEXT_SENTINEL, json.dumps(resp))
 
+    def test_bridge_role_is_case_insensitive(self) -> None:
+        os.environ[_ROLE_ENV] = "Manager"
+        self.assertEqual(helper.bridge_role(), "manager")
+        self.assertEqual(helper.allowed_actions(), helper._MANAGER_ACTIONS)
+
     def test_manager_bridge_refuses_body_actions(self) -> None:
         os.environ[_ROLE_ENV] = "manager"
         for action in ("review", "search", "chat_history", "response_stats", "send_preview", "send"):
