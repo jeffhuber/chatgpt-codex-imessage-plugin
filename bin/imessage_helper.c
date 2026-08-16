@@ -20,6 +20,7 @@
 #include <pwd.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -140,7 +141,7 @@ static void print_usage(const char *display_name) {
  * Product validation exit codes:
  * 2 = required artifact missing, 3 = symlink/non-regular artifact,
  * 4 = owner mismatch, 5 = group/world writable, 6 = not executable,
- * 7 = env too long,
+ * 7 = derived path/env too long,
  * 8 = CLI/allowlist usage error, 9 = bundle/home discovery failure.
  */
 static int validate_ownership(const char *path, const char *label, uid_t current_uid,
@@ -188,6 +189,19 @@ static int set_env_value(char *buffer, size_t size, const char *name,
     if (written < 0 || (size_t)written >= size) {
         fprintf(stderr, "%s: %s value is too long\n", HELPER_DISPLAY_NAME, name);
         return -1;
+    }
+    return 0;
+}
+
+static int format_path(char *buffer, size_t size, const char *label,
+                       const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    int written = vsnprintf(buffer, size, fmt, args);
+    va_end(args);
+    if (written < 0 || (size_t)written >= size) {
+        fprintf(stderr, "%s: %s path is too long\n", HELPER_DISPLAY_NAME, label);
+        return 7;
     }
     return 0;
 }
@@ -249,10 +263,17 @@ static int get_bundle_path(char *bundle_path, size_t bundle_path_size) {
         return 9;
     }
 
-    snprintf(bundle_path, bundle_path_size, "%s", d3);
+    int ret = format_path(bundle_path, bundle_path_size, "bundle", "%s", d3);
+    if (ret != 0) {
+        return ret;
+    }
 
     char info_plist[PATH_MAX];
-    snprintf(info_plist, sizeof(info_plist), "%s/Contents/Info.plist", bundle_path);
+    ret = format_path(info_plist, sizeof(info_plist), "Info.plist",
+                      "%s/Contents/Info.plist", bundle_path);
+    if (ret != 0) {
+        return ret;
+    }
     struct stat st;
     if (stat(info_plist, &st) != 0) {
         fprintf(stderr, "%s: Contents/Info.plist missing\n", HELPER_DISPLAY_NAME);
@@ -371,33 +392,40 @@ int main(int argc, char **argv) {
     }
 
     char bridge_root[PATH_MAX];
-    snprintf(bridge_root, sizeof(bridge_root),
-             "%s/Library/Application Support/%s/bridges/%s",
-             pw->pw_dir, APP_SUPPORT_DIRNAME, entry->product_id);
+    ret = format_path(bridge_root, sizeof(bridge_root), "bridge root",
+                      "%s/Library/Application Support/%s/bridges/%s",
+                      pw->pw_dir, APP_SUPPORT_DIRNAME, entry->product_id);
+    if (ret != 0) return ret;
 
     char policy_dir[PATH_MAX] = "";
     bool is_host = strcmp(entry->role, "host") == 0;
     if (is_host) {
-        snprintf(policy_dir, sizeof(policy_dir),
-                 "%s/Library/Application Support/%s/policies/%s",
-                 pw->pw_dir, APP_SUPPORT_DIRNAME, entry->product_id);
+        ret = format_path(policy_dir, sizeof(policy_dir), "policy dir",
+                          "%s/Library/Application Support/%s/policies/%s",
+                          pw->pw_dir, APP_SUPPORT_DIRNAME, entry->product_id);
+        if (ret != 0) return ret;
     }
 
     char helper_py[PATH_MAX];
-    snprintf(helper_py, sizeof(helper_py), "%s/Contents/Resources/core/bin/helper.py",
-             bundle_path);
+    ret = format_path(helper_py, sizeof(helper_py), "helper.py",
+                      "%s/Contents/Resources/core/bin/helper.py", bundle_path);
+    if (ret != 0) return ret;
 
     char send_gate_py[PATH_MAX];
-    snprintf(send_gate_py, sizeof(send_gate_py),
-             "%s/Contents/Resources/core/bin/send_gate.py", bundle_path);
+    ret = format_path(send_gate_py, sizeof(send_gate_py), "send_gate.py",
+                      "%s/Contents/Resources/core/bin/send_gate.py", bundle_path);
+    if (ret != 0) return ret;
 
     char confirm_helper[PATH_MAX];
-    snprintf(confirm_helper, sizeof(confirm_helper),
-             "%s/Contents/Helpers/imessage-confirm", bundle_path);
+    ret = format_path(confirm_helper, sizeof(confirm_helper), "confirm helper",
+                      "%s/Contents/Helpers/imessage-confirm", bundle_path);
+    if (ret != 0) return ret;
 
     char python_interp[PATH_MAX];
-    snprintf(python_interp, sizeof(python_interp),
-             "%s/Contents/Frameworks/Python.framework/%s", bundle_path, PYTHON_RELPATH);
+    ret = format_path(python_interp, sizeof(python_interp), "Python interpreter",
+                      "%s/Contents/Frameworks/Python.framework/%s",
+                      bundle_path, PYTHON_RELPATH);
+    if (ret != 0) return ret;
 
     ret = validate_ownership(helper_py, "helper.py", current_uid, bundle_owner, true, false);
     if (ret != 0) return ret;

@@ -57,6 +57,48 @@ print(module.ALLOWLIST_PATH)
             str(Path(os.path.abspath(bridge)) / "contacts" / "allowed_chats.txt"),
         )
 
+    def test_product_policy_environment_uses_policy_root(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="grokbot-policy-root-test-") as td:
+            bridge = Path(td) / "bridge"
+            policy = Path(td) / "policies" / "openai"
+            probe = """
+import importlib.util
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("policy_root_probe", path)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+print(module.POLICY_ROOT)
+print(module.READ_POLICY_PATH)
+print(module.BLOCKLIST_PATH)
+print(module.ALLOWLIST_PATH)
+"""
+            env = os.environ.copy()
+            env["IMESSAGE_BRIDGE_DIR"] = str(bridge)
+            env["IMESSAGE_POLICY_DIR"] = str(policy)
+            env["COWORK_IMESSAGE_READ_ALLOWLIST"] = ""
+            result = subprocess.run(
+                [sys.executable, "-c", probe, str(REPO_ROOT / "bin" / "helper.py")],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout.splitlines(),
+            [
+                str(Path(os.path.abspath(policy))),
+                str(Path(os.path.abspath(policy)) / "read_policy.txt"),
+                str(Path(os.path.abspath(policy)) / "blocked_chats.txt"),
+                str(Path(os.path.abspath(policy)) / "allowed_chats.txt"),
+            ],
+        )
+
     def test_policy_loader_rejects_directory_paths(self) -> None:
         with tempfile.TemporaryDirectory(prefix="grokbot-policy-dir-test-") as td:
             with mock.patch.object(helper, "log"):
@@ -135,6 +177,21 @@ print(module.ALLOWLIST_PATH)
 
 @unittest.skipUnless(shutil.which("clang"), "clang is required")
 class WrapperValidationTests(unittest.TestCase):
+    def test_product_path_derivations_use_checked_formatter(self) -> None:
+        source = (REPO_ROOT / "bin" / "imessage_helper.c").read_text()
+
+        self.assertIn("static int format_path", source)
+        for raw_target in (
+            "snprintf(bridge_root",
+            "snprintf(policy_dir",
+            "snprintf(helper_py",
+            "snprintf(send_gate_py",
+            "snprintf(confirm_helper",
+            "snprintf(python_interp",
+            "snprintf(info_plist",
+        ):
+            self.assertNotIn(raw_target, source)
+
     def test_wrapper_validates_every_loaded_component(self) -> None:
         with tempfile.TemporaryDirectory(prefix="grokbot-wrapper-test-") as td:
             root = Path(td)
