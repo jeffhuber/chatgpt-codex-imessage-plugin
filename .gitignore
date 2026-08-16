@@ -24,3 +24,4 @@ contacts/read_policy.txt
 *.swp
 .idea/
 .vscode/
+.venv/
