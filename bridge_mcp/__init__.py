@@ -1,10 +1,11 @@
-"""Thin re-export of bridge client for backward compatibility."""
+"""Bridge MCP package for local iMessage integration."""
 
 from bridge_mcp.client import (
     BridgeClient,
     BridgeError,
     DEFAULT_BRIDGE,
     MAX_RESPONSE_BYTES,
+    resolve_runtime_bridge,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "BridgeError",
     "DEFAULT_BRIDGE",
     "MAX_RESPONSE_BYTES",
+    "resolve_runtime_bridge",
 ]
