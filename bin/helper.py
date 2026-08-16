@@ -150,13 +150,6 @@ def allowed_actions(role: str | None = None) -> tuple[str, ...]:
     """Actions the worker will serve for `role`. Unknown roles get none."""
     return ROLE_ACTIONS.get(role if role is not None else bridge_role(), ())
 
-
-# Import-time view of the role for the manager-specific behaviours (unfiltered
-# contacts_lookup, no nonce reaping). The action gate itself always goes
-# through allowed_actions(), which serves nothing for an unknown role, so the
-# "host" fallback here can never widen what an unknown role may do.
-BRIDGE_ROLE = bridge_role() if bridge_role() in ROLE_ACTIONS else "host"
-
 # ---------------------------------------------------------------------------
 # Sibling module loading
 # ---------------------------------------------------------------------------
@@ -211,9 +204,9 @@ MAX_SEARCH_LEN = 200
 MAX_LIST_CHATS_DAYS = 3650
 LIST_CHATS_DEFAULT_DAYS = 365
 LIST_CHATS_DEFAULT_LIMIT = 200
+LIST_CHATS_FILTER_SCAN_LIMIT = 500
 MAX_LIST_CHATS_QUERY_LEN = 100
 MAX_LIST_CHATS_PARTICIPANTS = 10
-LIST_CHATS_FILTER_SCAN_LIMIT = 500
 MAX_TEXT_SNIPPET = 600
 MAX_CONTEXT_MESSAGES = 8
 MAX_REQUEST_BYTES = 64 * 1024
@@ -649,18 +642,20 @@ def lookup_name(chat_id: str, sender: str, contacts: dict[str, str]) -> str:
 
 def load_chat_participants(
     conn: sqlite3.Connection, chat_rowids: Iterable[int] | None = None
-) -> dict[str, list[str]]:
-    """Return {chat_identifier: [participant_handle, ...]}.
+) -> dict[Any, list[str]]:
+    """Return participant handles keyed by chat identifier or row ID.
 
     Used to build a human label for group chats whose chat_identifier is
     just "chatNNNNN…" and whose display_name is empty. With participants
     in hand we can render e.g. "Alice, Bob & 2 others" instead of the
     opaque group id. `chat_rowids` restricts the scan to candidate chats
-    (bounded callers such as list_chats); None keeps today's full scan.
+    (bounded callers such as list_chats) and returns a ROWID-keyed map so
+    duplicate chat_identifier rows cannot cross-contaminate participants.
+    None keeps today's full scan and identifier-keyed map for review.
     """
     cur = conn.cursor()
     sql = """
-        SELECT c.chat_identifier, h.id
+        SELECT c.ROWID, c.chat_identifier, h.id
         FROM chat c
         JOIN chat_handle_join chj ON chj.chat_id = c.ROWID
         JOIN handle h ON h.ROWID = chj.handle_id
@@ -678,14 +673,13 @@ def load_chat_participants(
             cur.execute(sql + " WHERE c.ROWID IN (%s)" % ",".join("?" * len(chunk)), chunk)
             rows.extend(cur.fetchall())
         out: dict[str, list[str]] = defaultdict(list)
-        for chat_ident, handle_id in rows:
-            ci = chat_ident.decode("utf-8", "ignore") if isinstance(chat_ident, bytes) else (chat_ident or "")
+        for chat_rowid, _chat_ident, handle_id in rows:
             hi = handle_id.decode("utf-8", "ignore") if isinstance(handle_id, bytes) else (handle_id or "")
-            if ci and hi:
-                out[ci].append(hi)
+            if chat_rowid is not None and hi:
+                out[int(chat_rowid)].append(hi)
         return out
     out: dict[str, list[str]] = defaultdict(list)
-    for chat_ident, handle_id in cur.fetchall():
+    for _chat_rowid, chat_ident, handle_id in cur.fetchall():
         ci = chat_ident.decode("utf-8", "ignore") if isinstance(chat_ident, bytes) else (chat_ident or "")
         hi = handle_id.decode("utf-8", "ignore") if isinstance(handle_id, bytes) else (handle_id or "")
         if ci and hi:
@@ -761,9 +755,9 @@ def _load_list(path: Path, require_root_owner: bool = False, require_uid_owner: 
 
 def load_privacy_policy() -> PrivacyPolicy:
     # Manager role: no policy files loaded
-    if BRIDGE_ROLE == "manager":
+    if bridge_role() == "manager":
         return PrivacyPolicy(mode="blocklist", blocklist=(), allowlist=())
-    
+
     mode_override = os.environ.get("COWORK_IMESSAGE_READ_POLICY", "runtime")
     if mode_override in ("allowlist", "blocklist"):
         mode = mode_override
@@ -784,7 +778,7 @@ def load_privacy_policy() -> PrivacyPolicy:
                     can_read_policy = False
             except FileNotFoundError:
                 can_read_policy = False
-        
+
         if can_read_policy:
             try:
                 mode = READ_POLICY_PATH.read_text(encoding="utf-8").strip().lower()
@@ -800,7 +794,7 @@ def load_privacy_policy() -> PrivacyPolicy:
                 mode = "allowlist"
             else:
                 mode = "blocklist"
-        
+
         if mode not in ("allowlist", "blocklist"):
             log(f"invalid read policy {mode!r}; failing closed in allowlist mode")
             mode = "allowlist"
@@ -822,7 +816,7 @@ def load_blocklist() -> list[str]:
 
 def is_send_policy_enabled() -> bool:
     """Check if send_policy.json enables sending. Product mode only; DIY always returns True."""
-    if "IMESSAGE_POLICY_DIR" not in os.environ:
+    if WRAPPER_MODE != "product":
         return True
     try:
         metadata = SEND_POLICY_PATH.lstat()
@@ -1560,7 +1554,7 @@ def action_contacts_lookup(params, conn, contacts, privacy_policy):
     matches = []
     for handle, full_name in contacts.items():
         # Manager role: unfiltered contacts
-        if BRIDGE_ROLE != "manager" and not is_read_allowed(handle, handle, privacy_policy):
+        if bridge_role() != "manager" and not is_read_allowed(handle, handle, privacy_policy):
             continue
         if nl in full_name.lower():
             if "@" in handle:
@@ -1631,9 +1625,9 @@ def action_list_chats(params, conn, contacts, privacy_policy):
         # report truncation without pulling every chat.
         cur.execute(sql + " LIMIT ?", (cutoff_ns, limit + 1))
     else:
-        # Labels and participant-handle query matches are resolved in Python,
-        # so filtered requests need a bounded candidate window before loading
-        # participants. `truncated` reports when that window may hide matches.
+        # Query/group filters happen after participant labels are assembled.
+        # Bound the candidate scan anyway so filtered requests cannot walk a
+        # whole large chat database before returning no matches.
         cur.execute(sql + " LIMIT ?", (cutoff_ns, candidate_limit + 1))
     rows = cur.fetchall()
     candidate_truncated = len(rows) > candidate_limit
@@ -1645,6 +1639,7 @@ def action_list_chats(params, conn, contacts, privacy_policy):
     ql = query.lower() if query else None
     items: list[dict] = []
     for row in rows:
+        chat_rowid = int(row[0])
         chat_id = _decode_db_text(row[1])
         display = _decode_db_text(row[2])
         service = _decode_db_text(row[3])
@@ -1656,7 +1651,7 @@ def action_list_chats(params, conn, contacts, privacy_policy):
         kind = _chat_kind(chat_id, style)
         if kind == "group" and not include_groups:
             continue
-        participants = list(participants_by_chat.get(chat_id, []))
+        participants = list(participants_by_chat.get(chat_rowid, []))
         if kind == "direct" and not participants:
             participants = [chat_id]
         if kind == "group":
@@ -1702,10 +1697,10 @@ def action_status(params, conn, contacts, privacy_policy):
     return {
         "helper_version": HELPER_VERSION,
         "protocol_version": PROTOCOL_VERSION,
-        "product_id": PRODUCT_ID,
-        "wrapper_mode": WRAPPER_MODE,
         "bridge_role": bridge_role(),
         "allowed_actions": sorted(allowed_actions()),
+        "product_id": PRODUCT_ID,
+        "wrapper_mode": WRAPPER_MODE,
         "host_display_name": HOST_DISPLAY_NAME,
         "launchd_label": "com.jeffhuber.chatgpt-codex-imessage" if WRAPPER_MODE == "baked" else None,
         "confirmation_helper_path": str(CONFIRM_HELPER_PATH),
@@ -1763,7 +1758,7 @@ def action_send_preview(params, conn, contacts, privacy_policy):
     """
     if not is_send_policy_enabled():
         raise ValueError("send operations are disabled by policy")
-    
+
     to = validate_send_recipient(params.get("to"))
     text = validate_send_text(params.get("text"))
     service = validate_service(params.get("service"))
@@ -1808,7 +1803,7 @@ def action_send(params, conn, contacts, privacy_policy):
     """
     if not is_send_policy_enabled():
         raise ValueError("send operations are disabled by policy")
-    
+
     to = validate_send_recipient(params.get("to"))
     text = validate_send_text(params.get("text"))
     service = validate_service(params.get("service"))
@@ -2047,9 +2042,6 @@ def process_request(
         _bad_request(req_stem, "bad request: params must be an object", req_id=req_id)
         return
 
-    # Role gate (ROLE_ACTIONS): enforced here in the worker, never only in a
-    # host or app layer. A manager bridge never serves bodies; a host bridge
-    # never enumerates chats; an unknown role serves nothing.
     permitted = allowed_actions()
     if action not in ACTIONS:
         write_response(req_stem, {
@@ -2060,6 +2052,9 @@ def process_request(
         })
         return
     if action not in permitted:
+        # Role gate: enforced here in the worker, never only in a host or
+        # app layer. A manager bridge never serves bodies; a host bridge
+        # never enumerates chats.
         write_response(req_stem, {
             "id": req_id,
             "ok": False,
@@ -2099,13 +2094,13 @@ def process_request(
             cleanup_tmpdb(db_path)
 
 
-def _acquire_bridge_lock(control_fd: int, timeout_s: float = 5.0) -> int:
+def _acquire_bridge_lock(control_fd: int, timeout_s: float = OSASCRIPT_TIMEOUT_S + 10.0) -> int:
     """Acquire an exclusive lock on control/lock with bounded wait.
 
     Returns the lock file descriptor on success. The caller must close it
     to release the lock. Raises RuntimeError on timeout or failure.
     """
-    deadline = time.time() + timeout_s
+    open_deadline = time.time() + timeout_s
     while True:
         try:
             lock_fd = os.open(
@@ -2116,14 +2111,22 @@ def _acquire_bridge_lock(control_fd: int, timeout_s: float = 5.0) -> int:
             )
             break
         except FileNotFoundError:
-            if time.time() >= deadline:
-                raise RuntimeError("could not open bridge lock file") from None
-            time.sleep(0.02)
+            if time.time() >= open_deadline:
+                message = "could not create bridge lock file"
+                log(message)
+                raise RuntimeError(message)
+            time.sleep(0.01)
+        except OSError as exc:
+            message = f"could not open bridge lock file: {exc}"
+            log(message)
+            raise RuntimeError(message) from exc
     try:
         _validate_regular_file(lock_fd, "control/lock", private=True)
-    except UnsafeRuntimePath:
+    except Exception as exc:
         os.close(lock_fd)
-        raise
+        message = f"unsafe bridge lock file: {exc}"
+        log(message)
+        raise RuntimeError(message) from exc
 
     # Try non-blocking lock first
     try:
@@ -2133,6 +2136,7 @@ def _acquire_bridge_lock(control_fd: int, timeout_s: float = 5.0) -> int:
         pass
 
     # Lock is held; poll with bounded wait
+    deadline = time.time() + timeout_s
     while time.time() < deadline:
         time.sleep(0.05)
         try:
@@ -2141,11 +2145,13 @@ def _acquire_bridge_lock(control_fd: int, timeout_s: float = 5.0) -> int:
         except (OSError, BlockingIOError):
             continue
 
-    os.close(lock_fd)
-    raise RuntimeError(
+    message = (
         f"could not acquire bridge lock within {timeout_s}s timeout; "
         "another worker is processing this bridge"
     )
+    log(message)
+    os.close(lock_fd)
+    raise RuntimeError(message)
 
 
 def main() -> None:
@@ -2160,7 +2166,7 @@ def main() -> None:
     # got a matching send (user cancelled, the host stopped before sending). Cheap; touches
     # only ~/imessage-bridge/nonces/ and only a few files at most.
     # Manager role: skip nonce reaping (no nonces directory created).
-    if BRIDGE_ROLE != "manager":
+    if bridge_role() != "manager":
         try:
             reap_expired_nonces()
         except Exception as e:
@@ -2170,9 +2176,13 @@ def main() -> None:
     # Hold for the entire drain; re-list requests once after acquiring to
     # catch any that arrived during the lock wait. The lock is released
     # automatically when lock_fd is closed on exit.
-    with _private_directory_fd(LOG_PATH.parent) as control_fd:
-        lock_fd = _acquire_bridge_lock(control_fd)
-    
+    try:
+        with _private_directory_fd(LOG_PATH.parent) as control_fd:
+            lock_fd = _acquire_bridge_lock(control_fd)
+    except RuntimeError as e:
+        log(f"bridge lock unavailable, deferring drain: {e}")
+        return
+
     try:
         # Only process complete request files (*.json, not temp/partial suffixes).
         with _private_directory_fd(REQUESTS_DIR) as requests_fd:
