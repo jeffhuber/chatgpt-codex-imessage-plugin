@@ -168,12 +168,16 @@ int main(int argc, char **argv) {
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--product") == 0) {
-            if (i + 1 >= argc) {
+            if (product_id || i + 1 >= argc) {
                 print_usage(HELPER_DISPLAY_NAME);
                 return 8;
             }
             product_id = argv[++i];
         } else if (strcmp(argv[i], "--validate-only") == 0) {
+            if (validate_only) {
+                print_usage(HELPER_DISPLAY_NAME);
+                return 8;
+            }
             validate_only = true;
         } else {
             print_usage(HELPER_DISPLAY_NAME);
