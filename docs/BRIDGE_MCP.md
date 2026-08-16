@@ -32,7 +32,7 @@ bridge-mcp --bridge-root <path>        # DIY-only, mutually exclusive with --pro
 
 - **`--product <claude|grok|openai>`**: Select the MCP host product. This determines bridge-root discovery, asset installation paths, and bundle-specific behaviors. Mutually exclusive with `--bridge-root`.
 
-- **`--transport <launchd|direct|socket>`**: Select the transport mechanism for communicating with the helper. Default: `launchd` (the file-based write-and-poll protocol). `direct` and `socket` transports are reserved for Season 2; see Transport Constraints below.
+- **`--transport <launchd|direct|socket>`**: Select the transport mechanism for communicating with the helper. Default: `launchd` (the file-based write-and-poll protocol). `direct` and `socket` transports are reserved for the S2 spike; see Transport Constraints below. `manager` is refused in serve mode.
 
 - **`--bridge-root <path>`**: DIY mode only. Explicitly specify the bridge runtime folder. Bypasses product-specific discovery and hardened bundle restrictions. Mutually exclusive with `--product`. This mode is for development and custom installations only; it is not used by Bridge Pro product modes.
 
@@ -149,21 +149,24 @@ The following changes require user notification and/or MCP host restart:
 
 ---
 
-## Launcher: `bridge_mcp_launcher.c`
+## Launcher: `Contents/MacOS/bridge-mcp`
 
-The launcher is a compiled C wrapper that enforces the security boundary between the MCP host and the Bridge Pro bundle. It is the target of the `~/.agents/plugins/marketplace.json` command path.
+The launcher is a compiled C executable that enforces the security boundary between the MCP host and the Bridge Pro bundle. It is the target of the `~/.agents/plugins/marketplace.json` command path.
+
+This is macOS-only.
 
 ### Requirements
 
-1. **Resolve own path:** Use platform API to get the absolute path of the running executable (e.g., `_NSGetExecutablePath` on macOS, `/proc/self/exe` on Linux).
+1. **Resolve own path:** Use `_NSGetExecutablePath` to get the absolute path of the running executable.
 
-2. **Require `/Contents/MacOS/bridge-mcp`:** The launcher must be invoked as `<bundle-root>/Contents/MacOS/bridge-mcp-launcher`. The Python entry point must be at `<bundle-root>/Contents/MacOS/bridge-mcp`.
+2. **Require `/Contents/MacOS/bridge-mcp`:** The executable path must end with `/Contents/MacOS/bridge-mcp`. Extract `<bundle-root>` from the resolved path.
 
-3. **Refuse symlinked components:** Validate that no component of the launcher's resolved path or the Python entry point is a symlink. This prevents PATH substitution attacks.
+3. **Refuse symlinked components:** Validate that no component of the launcher's resolved path is a symlink. This prevents PATH substitution attacks.
 
 4. **Exec bundled Python:** Execute the Python interpreter shipped with the bundle:
+   - Python binary: `<bundle>/Contents/Frameworks/Python.framework/<PYTHON_RELPATH>`
    - Flags: `-I` (isolated mode, no site packages), `-B` (no bytecode cache), `-X utf8` (UTF-8 mode)
-   - Entry point: `<bundle-root>/Contents/MacOS/bridge_mcp_main.py`
+   - Entry point: `<bundle>/Contents/Resources/mcp/bridge_mcp_main.py`
    - Pass through all arguments from the launcher invocation
 
 5. **Fixed environment:** Replace the environment with only these variables:
@@ -203,9 +206,12 @@ The `host-assets` subcommand manages MCP plugin manifests for ChatGPT, Codex, an
     {
       "command": "<absolute-path-to-bundle>/Contents/MacOS/bridge-mcp",
       "args": ["--product", "openai"],
-      "env": {}
+      "startup_timeout_sec": 15,
+      "tool_timeout_sec": 90,
+      "default_tools_approval_mode": "writes"
     }
     ```
+  - After writing `.mcp.json`, run `codex plugin add <name>@personal` when the Codex CLI is available.
   - **Preservation:** Never modify or remove the DIY `chatgpt-codex-imessage-plugin` entry (the legacy plugin name from the open-source era). Only manage the `bridge-pro-imessage` entry.
 
 - `verify`: Check that installed manifests reference the current bundle and have correct command/args. Report mismatches (e.g., manifests pointing to old bundle versions or incorrect args).
@@ -252,7 +258,7 @@ The `host-assets` subcommand manages MCP plugin manifests for ChatGPT, Codex, an
 In `--product` mode, the following arguments are **accepted**:
 
 - `--product <claude|grok|openai>`: Required. Determines bridge-root and host-specific behavior.
-- `--transport <launchd|direct|socket>`: Optional. Default: `launchd`. `direct` and `socket` are reserved for Season 2.
+- `--transport <launchd|direct|socket>`: Optional. Default: `launchd`. `direct` and `socket` are reserved for the S2 spike.
 
 All other arguments are **rejected** with a clear error message (e.g., `"--bridge-root is mutually exclusive with --product"`).
 
@@ -300,28 +306,18 @@ The Python entry point may read:
 
 ## Transport Constraints
 
-### Supported Transports (Season 1)
+### Supported Transports
 
-- **`launchd`** (default): The file-based write-and-poll protocol documented in `docs/PROTOCOL.md`. This is the **only supported transport** until Season 2.
+- **`launchd`** (default): The file-based write-and-poll protocol documented in `docs/PROTOCOL.md`. This is the **only supported transport** until the S2 spike.
 
 The `--transport launchd` flag is accepted but is the default and does not need to be specified.
 
-### Reserved Transports (Season 2)
+### Reserved Transports (S2 Spike)
 
 - **`direct`**: Direct Python subprocess invocation. Reserved for future use.
 - **`socket`**: Unix domain socket IPC. Reserved for future use.
 
-The `--transport direct` and `--transport socket` flags are **accepted for forward compatibility** but will fail at runtime in Season 1 with a clear error message: `"direct/socket transports are reserved for Season 2; use launchd (default) for now"`.
-
-### Refused Transports
-
-The following transports are **out of contract** and must not be mentioned in documentation or error messages:
-
-- **SSE** (Server-Sent Events)
-- **WebSocket**
-- **HTTP** (REST or long-polling)
-
-The `manager` transport (if present in upstream `mcp` examples) is also refused in serve mode.
+The `--transport direct` and `--transport socket` flags are **accepted for forward compatibility** but will fail at runtime with a clear error message: `"direct/socket transports are reserved for the S2 spike; use launchd (default) for now"`.
 
 ---
 
