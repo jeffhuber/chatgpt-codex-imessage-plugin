@@ -60,7 +60,7 @@ printf 'Test interpreter: %s (%s)\n' \
     "$TEST_PYTHON" "$("$TEST_PYTHON" -c 'import platform; print(platform.python_version())')"
 "$TEST_PYTHON" -m py_compile \
     bin/helper.py bin/send_gate.py plugin_server/bridge.py plugin_server/server.py \
-    bridge_mcp/server.py bridge_mcp/client.py bridge_mcp_main.py \
+    bridge_mcp/server.py bridge_mcp/client.py bridge_mcp/host_detection.py bridge_mcp_main.py \
     tools/doctor.py tools/check_version.py tools/configure_allowlist.py \
     tools/check_shared_core.py tools/install_plugin_manifest.py
 "$TEST_PYTHON" -m unittest discover -s tests -v

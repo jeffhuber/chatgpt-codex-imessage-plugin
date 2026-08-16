@@ -1,0 +1,14 @@
+{
+  "name": "personal",
+  "interface": {"displayName": "Personal"},
+  "plugins": [
+    {
+      "name": "bridge-pro-imessage",
+      "source": {
+        "source": "local",
+        "path": "./plugins/bridge-pro-imessage",
+        "command": "/Applications/Bridge Pro.app/Contents/MacOS/bridge-mcp"
+      }
+    }
+  ]
+}

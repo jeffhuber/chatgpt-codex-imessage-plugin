@@ -1,0 +1,13 @@
+{
+  "name": "personal",
+  "interface": {"displayName": "Personal"},
+  "plugins": [
+    {
+      "name": "chatgpt-codex-imessage-plugin",
+      "source": {
+        "source": "local",
+        "path": "./plugins/chatgpt-codex-imessage-plugin"
+      }
+    }
+  ]
+}
