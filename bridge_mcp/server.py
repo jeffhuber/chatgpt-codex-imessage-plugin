@@ -5,7 +5,7 @@ import sys
 from typing import Any
 from bridge_mcp.client import BridgeClient, BridgeError
 
-SERVER_VERSION = "1.2.2"
+SERVER_VERSION = "1.3.0"
 SUPPORTED_PROTOCOL_MAJOR = "1"
 _compatible_checked = False
 _client: BridgeClient | None = None
