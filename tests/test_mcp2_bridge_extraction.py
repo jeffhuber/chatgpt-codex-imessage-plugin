@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from bridge_mcp.client import LAYOUT, BridgeClient, resolve_runtime_bridge
+from bridge_mcp.client import LAYOUT, PRODUCT_IDS, BridgeClient, resolve_runtime_bridge
 
 
 class BridgeResolutionTests(unittest.TestCase):
@@ -38,7 +38,7 @@ class BridgeResolutionTests(unittest.TestCase):
     def test_product_mode_claude(self) -> None:
         """Product mode resolves to Bridge Pro/bridges/<product-id>."""
         resolved = resolve_runtime_bridge(product="claude")
-        expected = pathlib.Path.home() / "Library" / "Application Support" / "Bridge Pro" / "bridges" / "claude-desktop"
+        expected = pathlib.Path.home() / "Library" / "Application Support" / "Bridge Pro" / "bridges" / "claude"
         self.assertEqual(resolved, expected)
 
     def test_product_mode_grok(self) -> None:
@@ -50,7 +50,7 @@ class BridgeResolutionTests(unittest.TestCase):
     def test_product_mode_openai(self) -> None:
         """Product mode openai resolves correctly."""
         resolved = resolve_runtime_bridge(product="openai")
-        expected = pathlib.Path.home() / "Library" / "Application Support" / "Bridge Pro" / "bridges" / "chatgpt-codex"
+        expected = pathlib.Path.home() / "Library" / "Application Support" / "Bridge Pro" / "bridges" / "openai"
         self.assertEqual(resolved, expected)
 
     def test_product_and_explicit_path_are_mutually_exclusive(self) -> None:
@@ -66,10 +66,11 @@ class BridgeResolutionTests(unittest.TestCase):
         self.assertIn("Unknown product", str(ctx.exception))
 
     def test_layout_constant_has_expected_mappings(self) -> None:
-        """LAYOUT constant contains expected product mappings."""
-        self.assertEqual(LAYOUT["claude"], "claude-desktop")
-        self.assertEqual(LAYOUT["grok"], "grok")
-        self.assertEqual(LAYOUT["openai"], "chatgpt-codex")
+        """PRODUCT_IDS constant contains expected product IDs."""
+        self.assertIn("claude", PRODUCT_IDS)
+        self.assertIn("grok", PRODUCT_IDS)
+        self.assertIn("openai", PRODUCT_IDS)
+        self.assertEqual(len(PRODUCT_IDS), 3)
 
 
 class BridgeClientBackwardCompatTests(unittest.TestCase):
