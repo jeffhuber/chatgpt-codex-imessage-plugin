@@ -168,11 +168,12 @@ static int validate_ownership(const char *path, const char *label, uid_t current
                 HELPER_DISPLAY_NAME, label, path);
         return 5;
     }
-    if (st.st_uid != current_uid && st.st_uid != 0 && st.st_uid != bundle_owner) {
+    (void)current_uid;
+    if (st.st_uid != bundle_owner && st.st_uid != 0) {
         fprintf(stderr,
-                "%s: %s %s has uid %u, expected %u, 0, or %u; refusing\n",
+                "%s: %s %s has uid %u, expected 0 or bundle owner %u; refusing\n",
                 HELPER_DISPLAY_NAME, label, path, (unsigned int)st.st_uid,
-                (unsigned int)current_uid, (unsigned int)bundle_owner);
+                (unsigned int)bundle_owner);
         return 4;
     }
     if (require_executable && !(st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH))) {
