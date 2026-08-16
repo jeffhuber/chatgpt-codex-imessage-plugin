@@ -19,7 +19,7 @@
       "logical_name": "helper.py",
       "path": "bin/helper.py",
       "normalization": "identity",
-      "sha256": "e18a7a173d316a6e4a2d1367cfd328fa53e2d8abe26a6a98ff46d8ad64ab93fc"
+      "sha256": "0331d19e0495a72e582e11ad1bcb5a2edd97c1399b30b99d0dc0ae2350231023"
     },
     {
       "logical_name": "send_gate.py",
