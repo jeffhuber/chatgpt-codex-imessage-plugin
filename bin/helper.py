@@ -213,6 +213,7 @@ LIST_CHATS_DEFAULT_DAYS = 365
 LIST_CHATS_DEFAULT_LIMIT = 200
 MAX_LIST_CHATS_QUERY_LEN = 100
 MAX_LIST_CHATS_PARTICIPANTS = 10
+LIST_CHATS_FILTER_SCAN_LIMIT = 500
 MAX_TEXT_SNIPPET = 600
 MAX_CONTEXT_MESSAGES = 8
 MAX_REQUEST_BYTES = 64 * 1024
@@ -1623,13 +1624,20 @@ def action_list_chats(params, conn, contacts, privacy_policy):
         GROUP BY c.ROWID
         ORDER BY MAX(m.date) DESC
         """
-    if query is None and include_groups:
+    post_filtering = query is not None or not include_groups
+    candidate_limit = limit if not post_filtering else max(limit + 1, LIST_CHATS_FILTER_SCAN_LIMIT)
+    if not post_filtering:
         # No post-filtering: let SQLite stop after limit+1 rows so we can
         # report truncation without pulling every chat.
         cur.execute(sql + " LIMIT ?", (cutoff_ns, limit + 1))
     else:
-        cur.execute(sql, (cutoff_ns,))
+        # Labels and participant-handle query matches are resolved in Python,
+        # so filtered requests need a bounded candidate window before loading
+        # participants. `truncated` reports when that window may hide matches.
+        cur.execute(sql + " LIMIT ?", (cutoff_ns, candidate_limit + 1))
     rows = cur.fetchall()
+    candidate_truncated = len(rows) > candidate_limit
+    rows = rows[:candidate_limit]
 
     # Participants only for the candidate chats (bounded by LIMIT above), not
     # a full chat_handle_join scan.
@@ -1678,7 +1686,7 @@ def action_list_chats(params, conn, contacts, privacy_policy):
         if len(items) > limit:
             break
 
-    truncated = len(items) > limit
+    truncated = len(items) > limit or candidate_truncated
     items = items[:limit]
     return {
         "window_days": days,
@@ -2093,31 +2101,38 @@ def process_request(
 
 def _acquire_bridge_lock(control_fd: int, timeout_s: float = 5.0) -> int:
     """Acquire an exclusive lock on control/lock with bounded wait.
-    
+
     Returns the lock file descriptor on success. The caller must close it
     to release the lock. Raises RuntimeError on timeout or failure.
     """
-    lock_fd = os.open(
-        "lock",
-        os.O_CREAT | os.O_RDWR | _FILE_NOFOLLOW_FLAGS,
-        0o600,
-        dir_fd=control_fd,
-    )
+    deadline = time.time() + timeout_s
+    while True:
+        try:
+            lock_fd = os.open(
+                "lock",
+                os.O_CREAT | os.O_RDWR | _FILE_NOFOLLOW_FLAGS,
+                0o600,
+                dir_fd=control_fd,
+            )
+            break
+        except FileNotFoundError:
+            if time.time() >= deadline:
+                raise RuntimeError("could not open bridge lock file") from None
+            time.sleep(0.02)
     try:
         _validate_regular_file(lock_fd, "control/lock", private=True)
     except UnsafeRuntimePath:
         os.close(lock_fd)
         raise
-    
+
     # Try non-blocking lock first
     try:
         fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         return lock_fd
     except (OSError, BlockingIOError):
         pass
-    
+
     # Lock is held; poll with bounded wait
-    deadline = time.time() + timeout_s
     while time.time() < deadline:
         time.sleep(0.05)
         try:
@@ -2125,7 +2140,7 @@ def _acquire_bridge_lock(control_fd: int, timeout_s: float = 5.0) -> int:
             return lock_fd
         except (OSError, BlockingIOError):
             continue
-    
+
     os.close(lock_fd)
     raise RuntimeError(
         f"could not acquire bridge lock within {timeout_s}s timeout; "
