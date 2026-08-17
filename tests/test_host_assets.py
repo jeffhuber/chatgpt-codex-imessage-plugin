@@ -216,6 +216,7 @@ class HostAssetsTests(unittest.TestCase):
         os.environ.pop("BRIDGE_PRO_BUNDLE_ROOT")
         out = host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]
         self.assertEqual(out["status"], "mismatch"); self.assertEqual(out["reason"], "bundle-unresolved")
+        self.assertEqual(host_assets("detect", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "installed")
 
     def test_detection_selects_managed_server_by_name(self):
         self._install()
@@ -278,6 +279,8 @@ class HostAssetsTests(unittest.TestCase):
         mcp = self.home / "plugins/bridge-pro-imessage/.mcp.json"
         c = json.loads(mcp.read_text()); c["mcpServers"]["bridge-pro-imessage"]["command"] = "/opt/evil/bridge-mcp"; mcp.write_text(json.dumps(c))
         self.assertEqual(host_assets("detect", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")   # wrong path, though it says bridge-mcp
+        c["mcpServers"]["bridge-pro-imessage"]["command"] = "/tmp/bridge-mcp-wrapper"; mcp.write_text(json.dumps(c))
+        self.assertEqual(host_assets("detect", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")
 
     def test_cli_json_output(self):
         import io, contextlib

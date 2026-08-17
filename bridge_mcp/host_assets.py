@@ -156,6 +156,20 @@ def _managed_json_file_is_safe(path: pathlib.Path) -> bool:
     return stat.S_ISREG(st.st_mode) and st.st_uid == os.getuid() and not (st.st_mode & 0o077)
 
 
+def _command_has_bridge_app_shape(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    path = pathlib.PurePosixPath(value)
+    return (
+        path.is_absolute()
+        and ".." not in path.parts
+        and path.name == "bridge-mcp"
+        and path.parent.name == "MacOS"
+        and path.parent.parent.name == "Contents"
+        and path.parent.parent.parent.suffix == ".app"
+    )
+
+
 def _entry_state(marketplace: dict[str, Any], plugin_dir: pathlib.Path, command: pathlib.Path | None,
                  *, command_required: bool = True) -> tuple[str, dict[str, Any] | None]:
     """Shared by verify (command_required) and detect (structural check; command compared only when resolvable)."""
@@ -186,7 +200,10 @@ def _entry_state(marketplace: dict[str, Any], plugin_dir: pathlib.Path, command:
     except (OSError, json.JSONDecodeError):
         version = None
     # No resolvable current bundle ⇒ nothing can be "current"; verify reports it rather than skipping the comparison.
-    command_ok = configured.get("command") == str(command) if command is not None else False
+    if command is not None:
+        command_ok = configured.get("command") == str(command)
+    else:
+        command_ok = not command_required and _command_has_bridge_app_shape(configured.get("command"))
     current = command_ok and configured.get("args") == ["--product", "openai"] and version == VERSION
     return ("installed" if current else "mismatch"), ours
 
