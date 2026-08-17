@@ -206,15 +206,20 @@ def _entry_state(marketplace: dict[str, Any], plugin_dir: pathlib.Path, command:
         return "mismatch", ours
     try:
         plugin_meta = json.loads(plugin_meta_path.read_text(encoding="utf-8"))
-        version = plugin_meta.get("version") if isinstance(plugin_meta, dict) else None
+        plugin_meta_current = (
+            isinstance(plugin_meta, dict)
+            and plugin_meta.get("name") == BRIDGE_PRO_PLUGIN_NAME
+            and plugin_meta.get("mcpServers") == "./.mcp.json"
+            and plugin_meta.get("version") == VERSION
+        )
     except (OSError, json.JSONDecodeError):
-        version = None
+        plugin_meta_current = False
     # No resolvable current bundle ⇒ nothing can be "current"; verify reports it rather than skipping the comparison.
     if command is not None:
         command_ok = configured.get("command") == str(command)
     else:
         command_ok = not command_required and _command_has_bridge_app_shape(configured.get("command"))
-    current = command_ok and configured.get("args") == ["--product", "openai"] and version == VERSION
+    current = command_ok and configured.get("args") == ["--product", "openai"] and plugin_meta_current
     return ("installed" if current else "mismatch"), ours
 
 

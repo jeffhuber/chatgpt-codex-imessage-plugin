@@ -92,6 +92,12 @@ class HostAssetsTests(unittest.TestCase):
         (self.home / "plugins/bridge-pro-imessage/.codex-plugin/plugin.json").write_text("[]")
         self.assertEqual(host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")
         self._install(refresh=True)
+        plugin_json = self.home / "plugins/bridge-pro-imessage/.codex-plugin/plugin.json"
+        plugin_json.write_text(json.dumps({"name": "wrong", "version": VERSION, "mcpServers": "./.mcp.json"}))
+        self.assertEqual(host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")
+        plugin_json.write_text(json.dumps({"name": "bridge-pro-imessage", "version": VERSION, "mcpServers": "./elsewhere.json"}))
+        self.assertEqual(host_assets("detect", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")
+        self._install(refresh=True)
         self.assertEqual(host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "installed")
 
     def test_existing_permissive_dirs_are_tightened(self):
