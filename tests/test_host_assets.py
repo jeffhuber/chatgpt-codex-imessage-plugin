@@ -163,6 +163,36 @@ class HostAssetsTests(unittest.TestCase):
         self.assertEqual(json.loads(self.marketplace.read_text())["plugins"][0]["source"]["path"], "./plugins/bridge-pro-imessage")
         self.assertEqual(host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "installed")
 
+    def test_symlinked_bundle_command_is_rejected(self):
+        real = self.bundle
+        link = self.tmp / "Linked.app"; link.symlink_to(real)
+        os.environ["BRIDGE_PRO_BUNDLE_ROOT"] = str(link)
+        with self.assertRaises(ValueError):
+            self._install()
+        os.environ["BRIDGE_PRO_BUNDLE_ROOT"] = str(real)
+        launcher = real / "Contents" / "MacOS" / "bridge-mcp"; launcher.unlink()
+        launcher.symlink_to(self.tmp / "elsewhere"); (self.tmp / "elsewhere").write_text("#!/bin/sh\n")
+        with self.assertRaises(ValueError):
+            self._install()
+
+    def test_verify_without_resolvable_bundle_is_mismatch_not_installed(self):
+        self._install()
+        os.environ.pop("BRIDGE_PRO_BUNDLE_ROOT")
+        out = host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]
+        self.assertEqual(out["status"], "mismatch"); self.assertEqual(out["reason"], "bundle-unresolved")
+
+    def test_detection_selects_managed_server_by_name(self):
+        self._install()
+        mcp_path = self.home / "plugins/bridge-pro-imessage/.mcp.json"
+        m = json.loads(mcp_path.read_text())
+        # An unrelated server inserted FIRST must not change the verdict either way.
+        m["mcpServers"] = {"other": {"command": "/usr/bin/true"}, **m["mcpServers"]}
+        mcp_path.write_text(json.dumps(m))
+        self.assertEqual(host_assets("detect", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "installed")
+        m["mcpServers"] = {"other": {"command": "/opt/bridge-mcp"}, "bridge-pro-imessage": {"command": "/usr/bin/true"}}
+        mcp_path.write_text(json.dumps(m))
+        self.assertEqual(host_assets("detect", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")
+
     def test_cli_json_output(self):
         import io, contextlib
         buf = io.StringIO()

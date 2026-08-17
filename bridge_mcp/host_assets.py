@@ -46,8 +46,13 @@ def _bundle_command(bundle_root: str | None) -> pathlib.Path:
     if not root_path.is_absolute() or ".." in root_path.parts:
         raise ValueError("bundle root must be an absolute path")
     command = root_path / MCP_RELPATH
-    if not command.is_file():
-        raise ValueError(f"bridge-mcp launcher missing at {command}")
+    # Never follow symlinks: a symlinked bundle root or descendant could persist a command resolving outside the bundle.
+    _reject_symlink_components(command)
+    try:
+        if not stat.S_ISREG(command.lstat().st_mode):
+            raise ValueError(f"bridge-mcp launcher is not a regular file: {command}")
+    except FileNotFoundError:
+        raise ValueError(f"bridge-mcp launcher missing at {command}") from None
     return command
 
 
@@ -142,7 +147,8 @@ def _entry_state(marketplace: dict[str, Any], plugin_dir: pathlib.Path, command:
         version = plugin_meta.get("version") if isinstance(plugin_meta, dict) else None
     except (OSError, json.JSONDecodeError):
         version = None
-    current = (command is None or configured.get("command") == str(command)) and \
+    # No resolvable current bundle ⇒ nothing can be "current"; verify reports it rather than skipping the comparison.
+    current = command is not None and configured.get("command") == str(command) and \
         configured.get("args") == ["--product", "openai"] and version == VERSION
     return ("installed" if current else "mismatch"), ours
 
@@ -245,8 +251,10 @@ def host_assets(subcommand: str, *, host: str | None = None, all_hosts: bool = F
     except ValueError:
         command = None
     marketplace = _load_marketplace(marketplace_path) if marketplace_path.exists() else {"plugins": []}
-    state, _ = _entry_state(marketplace, plugin_dir, command)
+    state, ours = _entry_state(marketplace, plugin_dir, command)
     result: dict[str, Any] = {"status": state}
+    if command is None and ours is not None:
+        result["reason"] = "bundle-unresolved"   # BRIDGE_PRO_BUNDLE_ROOT missing/invalid: cannot confirm the manifest points at this bundle
     if state == "installed":
         result["version"] = VERSION
         result["path"] = str(command) if command else None

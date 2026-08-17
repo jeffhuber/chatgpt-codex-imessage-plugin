@@ -58,8 +58,9 @@ def _detect_chatgpt_codex(home: pathlib.Path) -> dict[str, Any]:
         if not command:
             try:
                 servers = json.loads((home / "plugins" / BRIDGE_PRO_PLUGIN_NAME / ".mcp.json").read_text(encoding="utf-8")).get("mcpServers", {})
-                command = next(iter(servers.values()), {}).get("command")
-            except (OSError, json.JSONDecodeError, AttributeError):
+                managed = servers.get(BRIDGE_PRO_PLUGIN_NAME) if isinstance(servers, dict) else None   # by name, never "first server"
+                command = managed.get("command") if isinstance(managed, dict) else None
+            except (OSError, json.JSONDecodeError, AttributeError, TypeError):
                 command = None
         asset_status = "installed" if command and "bridge-mcp" in str(command) else "mismatch"
     elif diy_entry:
