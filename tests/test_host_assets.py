@@ -129,18 +129,24 @@ class HostAssetsTests(unittest.TestCase):
         self.assertEqual(json.loads(target.read_text())["mcpServers"]["bridge-pro-imessage"]["args"], ["--product", "openai"])
 
     def test_codex_activation_step(self):
-        # No codex on PATH → reported, not fatal.
+        # No codex on PATH → reported as a failed Codex install, not as a false success.
         out = host_assets("install", host="codex", home=self.home, codex_path=str(self.tmp / "missing-codex"))
         self.assertEqual(out["hosts"]["codex"]["codex_activation"], "codex-not-found")
+        self.assertEqual(out["hosts"]["codex"]["status"], "mismatch")
+        self.assertFalse(out["ok"])
         # A fake codex CLI records the exact argv and succeeds.
         fake = self.tmp / "codex"; log = self.tmp / "codex.log"
         fake.write_text(f"#!/bin/sh\nprintf '%s ' \"$@\" > {log}\nexit 0\n"); os.chmod(fake, 0o755)
         out = host_assets("install", host="codex", home=self.home, refresh=True, codex_path=str(fake))
         self.assertEqual(out["hosts"]["codex"]["codex_activation"], "activated")
+        self.assertEqual(out["hosts"]["codex"]["status"], "installed")
+        self.assertTrue(out["ok"])
         self.assertEqual(log.read_text().strip(), "plugin add bridge-pro-imessage@personal")
         fake.write_text("#!/bin/sh\nexit 3\n")
         out = host_assets("install", host="codex", home=self.home, refresh=True, codex_path=str(fake))
         self.assertEqual(out["hosts"]["codex"]["codex_activation"], "failed:3")
+        self.assertEqual(out["hosts"]["codex"]["status"], "mismatch")
+        self.assertFalse(out["ok"])
         # chatgpt target never runs codex.
         out = host_assets("install", host="chatgpt", home=self.home, refresh=True, codex_path=str(fake))
         self.assertNotIn("codex_activation", out["hosts"]["chatgpt"])

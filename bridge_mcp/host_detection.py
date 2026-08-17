@@ -14,8 +14,9 @@ BRIDGE_PRO_PLUGIN_NAME = "bridge-pro-imessage"
 DIY_PLUGIN_NAME = "chatgpt-codex-imessage-plugin"
 
 def _detect_claude_desktop(home: pathlib.Path) -> dict[str, Any]:
+    probe_global_apps = home == pathlib.Path.home()
     markers = {
-        "claude_app": pathlib.Path("/Applications/Claude.app").is_dir(),
+        "claude_app": probe_global_apps and pathlib.Path("/Applications/Claude.app").is_dir(),
         "macos_config": (home / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json").is_file(),
         "linux_config": (home / ".config" / "claude_desktop_config.json").is_file(),
     }
@@ -28,8 +29,9 @@ def _detect_claude_desktop(home: pathlib.Path) -> dict[str, Any]:
     return {"present": any(markers.values()), "markers": markers, "asset_status": "not_applicable"}
 
 def _detect_chatgpt_codex(home: pathlib.Path) -> dict[str, Any]:
+    probe_global_apps = home == pathlib.Path.home()
     markers = {
-        "chatgpt_app": pathlib.Path("/Applications/ChatGPT.app").is_dir(),
+        "chatgpt_app": probe_global_apps and pathlib.Path("/Applications/ChatGPT.app").is_dir(),
         "plugins_dir": (home / "plugins").is_dir(),
         "codex_plugins": (home / ".codex" / "plugins").is_dir(),
     }

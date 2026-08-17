@@ -23,7 +23,7 @@ class TestHostDetection(unittest.TestCase):
     def test_chatgpt_app_only_fixture(self):
         hosts = detect_hosts(home=self.fixtures / "chatgpt-app-only", path_env="/usr/bin")
         self.assertTrue(hosts["openai"]["present"])
-        self.assertEqual(hosts["openai"]["asset_status"], "installed")
+        self.assertEqual(hosts["openai"]["asset_status"], "mismatch")
         self.assertIsNotNone(hosts["openai"]["bridge_pro_entry"])
 
     def test_diy_only_fixture(self):
@@ -42,11 +42,11 @@ class TestHostDetection(unittest.TestCase):
         hosts = detect_hosts(home=self.fixtures / "mixed", path_env="/usr/bin")
         self.assertTrue(hosts["claude"]["present"])
         self.assertTrue(hosts["openai"]["present"])
-        self.assertEqual(hosts["openai"]["asset_status"], "installed")
+        self.assertEqual(hosts["openai"]["asset_status"], "mismatch")
 
     def test_bridge_pro_valid_fixture(self):
         hosts = detect_hosts(home=self.fixtures / "bridge-pro-valid", path_env="/usr/bin")
-        self.assertEqual(hosts["openai"]["asset_status"], "installed")
+        self.assertEqual(hosts["openai"]["asset_status"], "mismatch")
         self.assertEqual(hosts["openai"]["bridge_pro_entry"]["name"], BRIDGE_PRO_PLUGIN_NAME)
 
     def test_bridge_pro_mismatch_fixture(self):
@@ -61,8 +61,8 @@ class TestHostDetection(unittest.TestCase):
 
     def test_doctor_check_6_valid(self):
         result = doctor_check_6_json(home=self.fixtures / "bridge-pro-valid", path_env="/usr/bin")
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["hosts"]["openai"]["asset_status"], "installed")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["hosts"]["openai"]["asset_status"], "mismatch")
 
     def test_doctor_check_6_diy_only(self):
         result = doctor_check_6_json(home=self.fixtures / "diy-only", path_env="/usr/bin")

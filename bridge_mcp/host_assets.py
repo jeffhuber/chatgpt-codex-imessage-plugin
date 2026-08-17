@@ -186,8 +186,7 @@ def _entry_state(marketplace: dict[str, Any], plugin_dir: pathlib.Path, command:
     except (OSError, json.JSONDecodeError):
         version = None
     # No resolvable current bundle ⇒ nothing can be "current"; verify reports it rather than skipping the comparison.
-    command_ok = (configured.get("command") == str(command)) if command is not None else \
-        (not command_required and "bridge-mcp" in str(configured.get("command", "")))
+    command_ok = configured.get("command") == str(command) if command is not None else False
     current = command_ok and configured.get("args") == ["--product", "openai"] and version == VERSION
     return ("installed" if current else "mismatch"), ours
 
@@ -260,9 +259,13 @@ def host_assets(subcommand: str, *, host: str | None = None, all_hosts: bool = F
         for t in targets:
             info: dict[str, Any] = {"status": "installed", "version": VERSION, "path": str(command)}
             if t == "codex":
-                info["codex_activation"] = _codex_plugin_add(codex_path)
+                activation = _codex_plugin_add(codex_path)
+                info["codex_activation"] = activation
+                if activation != "activated":
+                    info["status"] = "mismatch"
+                    info["reason"] = activation
             hosts[t] = info
-        return {"ok": True, "hosts": hosts}
+        return {"ok": all(info["status"] == "installed" for info in hosts.values()), "hosts": hosts}
 
     if subcommand == "remove":
         # Validate every removal target FIRST (same symlink discipline as install); only then mutate anything, so a
