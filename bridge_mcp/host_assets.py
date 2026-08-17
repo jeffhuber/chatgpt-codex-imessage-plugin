@@ -49,10 +49,13 @@ def _bundle_command(bundle_root: str | None) -> pathlib.Path:
     # Never follow symlinks: a symlinked bundle root or descendant could persist a command resolving outside the bundle.
     _reject_symlink_components(command)
     try:
-        if not stat.S_ISREG(command.lstat().st_mode):
-            raise ValueError(f"bridge-mcp launcher is not a regular file: {command}")
+        st = command.lstat()
     except FileNotFoundError:
         raise ValueError(f"bridge-mcp launcher missing at {command}") from None
+    if not stat.S_ISREG(st.st_mode):
+        raise ValueError(f"bridge-mcp launcher is not a regular file: {command}")
+    if not (st.st_mode & 0o111) or not os.access(command, os.X_OK):
+        raise ValueError(f"bridge-mcp launcher is not executable: {command}")   # the host could never launch it
     return command
 
 
@@ -79,15 +82,24 @@ def _load_marketplace(path: pathlib.Path) -> dict[str, Any]:
 
 
 def _ensure_private_dir(path: pathlib.Path) -> None:
-    """mkdir -p 0700 and, for pre-existing components we own, strip group/world bits."""
+    """mkdir -p, creating every missing component 0700 (independent of umask), and strip group/world bits from
+    pre-existing components we own within the managed subtree (<home>/.agents/plugins/… or <home>/plugins/…)."""
     _reject_symlink_components(path)
-    path.mkdir(parents=True, mode=0o700, exist_ok=True)
+    missing: list[pathlib.Path] = []
     current = path
-    for _ in range(3):   # the plugin dir and its parents we created: <home>/plugins/<name>[/.codex-plugin]
+    while not current.exists() and current != current.parent:
+        missing.append(current); current = current.parent
+    for directory in reversed(missing):            # top-down: each new component is chmod'ed right after creation
+        directory.mkdir(mode=0o700)
+        os.chmod(directory, 0o700)
+    current = path
+    for _ in range(4):   # <home>/plugins/<name>[/.codex-plugin] or <home>/.agents/plugins
         st = current.lstat()
         if stat.S_ISDIR(st.st_mode) and st.st_uid == os.getuid() and (st.st_mode & 0o077):
             os.chmod(current, 0o700)
         if current.name in ("plugins", ".agents") or current == current.parent:
+            if current.name == "plugins" and current.parent.name == ".agents":
+                current = current.parent; continue   # also tighten a freshly created ~/.agents
             break
         current = current.parent
 

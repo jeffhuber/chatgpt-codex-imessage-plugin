@@ -19,7 +19,7 @@ class HostAssetsTests(unittest.TestCase):
         self.bundle = self.tmp / "Bridge Pro.app"           # path with a space (acceptance)
         launcher = self.bundle / "Contents" / "MacOS" / "bridge-mcp"
         launcher.parent.mkdir(parents=True)
-        launcher.write_text("#!/bin/sh\n")
+        launcher.write_text("#!/bin/sh\n"); os.chmod(launcher, 0o755)
         os.environ["BRIDGE_PRO_BUNDLE_ROOT"] = str(self.bundle)
         self.marketplace = self.home / ".agents" / "plugins" / "marketplace.json"
 
@@ -202,6 +202,26 @@ class HostAssetsTests(unittest.TestCase):
         server.configure(bridge_root=str(self.tmp / "bridge"))
         self.assertFalse(server._compatible_checked); self.assertIsNone(server._client)
         server.configure()   # back to defaults
+
+    def test_non_executable_launcher_is_rejected(self):
+        launcher = self.bundle / "Contents" / "MacOS" / "bridge-mcp"; os.chmod(launcher, 0o644)
+        with self.assertRaises(ValueError):
+            self._install()
+        os.chmod(launcher, 0o755); self._install()
+        os.chmod(launcher, 0o644)
+        self.assertEqual(host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")
+
+    def test_every_created_ancestor_is_private(self):
+        import shutil
+        shutil.rmtree(self.home / "plugins", ignore_errors=True)
+        old = os.umask(0o022)
+        try:
+            self._install()
+        finally:
+            os.umask(old)
+        for rel in (".agents", ".agents/plugins", "plugins", "plugins/bridge-pro-imessage", "plugins/bridge-pro-imessage/.codex-plugin"):
+            mode = (self.home / rel).lstat().st_mode & 0o777
+            self.assertEqual(mode, 0o700, rel)
 
     def test_cli_json_output(self):
         import io, contextlib
