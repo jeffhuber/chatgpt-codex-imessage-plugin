@@ -52,17 +52,18 @@ def _detect_chatgpt_codex(home: pathlib.Path) -> dict[str, Any]:
         except (json.JSONDecodeError, OSError):
             pass
     if bridge_pro_entry:
-        # The marketplace entry only points at the plugin dir; the command lives in its .mcp.json.
-        source = bridge_pro_entry.get("source")
-        command = source.get("command") if isinstance(source, dict) else bridge_pro_entry.get("command")
-        if not command:
-            try:
-                servers = json.loads((home / "plugins" / BRIDGE_PRO_PLUGIN_NAME / ".mcp.json").read_text(encoding="utf-8")).get("mcpServers", {})
-                managed = servers.get(BRIDGE_PRO_PLUGIN_NAME) if isinstance(servers, dict) else None   # by name, never "first server"
-                command = managed.get("command") if isinstance(managed, dict) else None
-            except (OSError, json.JSONDecodeError, AttributeError, TypeError):
-                command = None
-        asset_status = "installed" if command and "bridge-mcp" in str(command) else "mismatch"
+        # Same structural checks as verify (entry source path, managed server by name, args, plugin version); the exact
+        # bundle command is compared when BRIDGE_PRO_BUNDLE_ROOT resolves, else it must at least be a bridge-mcp path.
+        from bridge_mcp import host_assets   # local import: host_assets imports this module
+        try:
+            command = host_assets._bundle_command(None)
+        except ValueError:
+            command = None
+        try:
+            asset_status, _ = host_assets._entry_state(marketplace, home / "plugins" / BRIDGE_PRO_PLUGIN_NAME, command,
+                                                       command_required=command is not None)
+        except (KeyError, TypeError):
+            asset_status = "mismatch"
     elif diy_entry:
         asset_status = "diy_only"
     return {"present": any(markers.values()), "markers": markers, "asset_status": asset_status, "bridge_pro_entry": bridge_pro_entry, "diy_entry": diy_entry}

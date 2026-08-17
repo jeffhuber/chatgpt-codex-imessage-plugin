@@ -237,6 +237,17 @@ class HostAssetsTests(unittest.TestCase):
             rc = bridge_mcp_main.main(["--product", "openai", "--transport", "socket"])
         self.assertEqual(rc, 2); self.assertIn("MCP-13", err.getvalue())
 
+    def test_detect_and_verify_agree_on_stale_manifest(self):
+        self._install()
+        meta = self.home / "plugins/bridge-pro-imessage/.codex-plugin/plugin.json"
+        m = json.loads(meta.read_text()); m["version"] = "0.0.1"; meta.write_text(json.dumps(m))   # stale version
+        self.assertEqual(host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")
+        self.assertEqual(host_assets("detect", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")
+        self._install(refresh=True)
+        mcp = self.home / "plugins/bridge-pro-imessage/.mcp.json"
+        c = json.loads(mcp.read_text()); c["mcpServers"]["bridge-pro-imessage"]["command"] = "/opt/evil/bridge-mcp"; mcp.write_text(json.dumps(c))
+        self.assertEqual(host_assets("detect", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")   # wrong path, though it says bridge-mcp
+
     def test_cli_json_output(self):
         import io, contextlib
         buf = io.StringIO()

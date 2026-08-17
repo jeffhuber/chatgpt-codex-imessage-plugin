@@ -140,7 +140,9 @@ def _plugin_files(plugin_dir: pathlib.Path, command: pathlib.Path) -> None:
         "interface": {"displayName": "Bridge Pro iMessage", "category": "Productivity"}})
 
 
-def _entry_state(marketplace: dict[str, Any], plugin_dir: pathlib.Path, command: pathlib.Path | None) -> tuple[str, dict[str, Any] | None]:
+def _entry_state(marketplace: dict[str, Any], plugin_dir: pathlib.Path, command: pathlib.Path | None,
+                 *, command_required: bool = True) -> tuple[str, dict[str, Any] | None]:
+    """Shared by verify (command_required) and detect (structural check; command compared only when resolvable)."""
     ours = next((p for p in marketplace["plugins"] if isinstance(p, dict) and p.get("name") == BRIDGE_PRO_PLUGIN_NAME), None)
     diy = next((p for p in marketplace["plugins"] if isinstance(p, dict) and p.get("name") == DIY_PLUGIN_NAME), None)
     if ours is None:
@@ -163,8 +165,9 @@ def _entry_state(marketplace: dict[str, Any], plugin_dir: pathlib.Path, command:
     except (OSError, json.JSONDecodeError):
         version = None
     # No resolvable current bundle ⇒ nothing can be "current"; verify reports it rather than skipping the comparison.
-    current = command is not None and configured.get("command") == str(command) and \
-        configured.get("args") == ["--product", "openai"] and version == VERSION
+    command_ok = (configured.get("command") == str(command)) if command is not None else \
+        (not command_required and "bridge-mcp" in str(configured.get("command", "")))
+    current = command_ok and configured.get("args") == ["--product", "openai"] and version == VERSION
     return ("installed" if current else "mismatch"), ours
 
 
