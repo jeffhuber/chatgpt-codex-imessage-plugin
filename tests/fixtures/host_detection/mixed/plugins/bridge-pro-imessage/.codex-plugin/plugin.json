@@ -1,0 +1,10 @@
+{
+  "name": "bridge-pro-imessage",
+  "version": "1.3.0",
+  "description": "Bridge Pro iMessage bridge (managed by Bridge Pro.app; do not edit).",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Bridge Pro iMessage",
+    "category": "Productivity"
+  }
+}

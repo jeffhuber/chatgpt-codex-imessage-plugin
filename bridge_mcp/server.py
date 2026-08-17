@@ -3,17 +3,26 @@ from __future__ import annotations
 import json
 import sys
 from typing import Any
-from bridge_mcp.client import BridgeClient, BridgeError
+import pathlib
+from bridge_mcp.client import BridgeClient, BridgeError, resolve_runtime_bridge
 
 SERVER_VERSION = "1.3.0"
 SUPPORTED_PROTOCOL_MAJOR = "1"
 _compatible_checked = False
 _client: BridgeClient | None = None
+_configured_root: "pathlib.Path | None" = None
+
+def configure(product: str | None = None, bridge_root: str | None = None) -> None:
+    """Select the bridge root before serving (bridge-mcp --product / --bridge-root)."""
+    global _configured_root, _client, _compatible_checked
+    _configured_root = resolve_runtime_bridge(explicit_path=bridge_root, product=product) if (product or bridge_root) else None
+    _client = None
+    _compatible_checked = False   # a different bridge must pass its own protocol check before any operation
 
 def _get_client() -> BridgeClient:
     global _client
     if _client is None:
-        _client = BridgeClient()
+        _client = BridgeClient(bridge_root=_configured_root)
     return _client
 
 def _request(action: str, params: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
@@ -124,7 +133,9 @@ def _handle_tools_call(request: dict[str, Any]) -> dict[str, Any]:
 def _handle_ping(request: dict[str, Any]) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": request.get("id"), "result": {}}
 
-def run_server() -> None:
+def run_server(product: str | None = None, bridge_root: str | None = None) -> None:
+    if product or bridge_root:
+        configure(product=product, bridge_root=bridge_root)
     while True:
         try:
             message = _read_message()

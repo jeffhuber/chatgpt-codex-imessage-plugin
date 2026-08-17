@@ -14,8 +14,9 @@ BRIDGE_PRO_PLUGIN_NAME = "bridge-pro-imessage"
 DIY_PLUGIN_NAME = "chatgpt-codex-imessage-plugin"
 
 def _detect_claude_desktop(home: pathlib.Path) -> dict[str, Any]:
+    probe_global_apps = home == pathlib.Path.home()
     markers = {
-        "claude_app": pathlib.Path("/Applications/Claude.app").is_dir(),
+        "claude_app": probe_global_apps and pathlib.Path("/Applications/Claude.app").is_dir(),
         "macos_config": (home / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json").is_file(),
         "linux_config": (home / ".config" / "claude_desktop_config.json").is_file(),
     }
@@ -28,8 +29,9 @@ def _detect_claude_desktop(home: pathlib.Path) -> dict[str, Any]:
     return {"present": any(markers.values()), "markers": markers, "asset_status": "not_applicable"}
 
 def _detect_chatgpt_codex(home: pathlib.Path) -> dict[str, Any]:
+    probe_global_apps = home == pathlib.Path.home()
     markers = {
-        "chatgpt_app": pathlib.Path("/Applications/ChatGPT.app").is_dir(),
+        "chatgpt_app": probe_global_apps and pathlib.Path("/Applications/ChatGPT.app").is_dir(),
         "plugins_dir": (home / "plugins").is_dir(),
         "codex_plugins": (home / ".codex" / "plugins").is_dir(),
     }
@@ -41,19 +43,33 @@ def _detect_chatgpt_codex(home: pathlib.Path) -> dict[str, Any]:
     if markers["marketplace_json"]:
         try:
             marketplace = json.loads(marketplace_path.read_text(encoding="utf-8"))
-            for plugin in marketplace.get("plugins", []):
-                if not isinstance(plugin, dict):
-                    continue
-                name = plugin.get("name")
-                if name == BRIDGE_PRO_PLUGIN_NAME:
-                    bridge_pro_entry = plugin
-                elif name == DIY_PLUGIN_NAME:
-                    diy_entry = plugin
+            plugins = marketplace.get("plugins") if isinstance(marketplace, dict) else None
+            if not isinstance(plugins, list):
+                asset_status = "mismatch"
+            else:
+                for plugin in plugins:
+                    if not isinstance(plugin, dict):
+                        continue
+                    name = plugin.get("name")
+                    if name == BRIDGE_PRO_PLUGIN_NAME:
+                        bridge_pro_entry = plugin
+                    elif name == DIY_PLUGIN_NAME:
+                        diy_entry = plugin
         except (json.JSONDecodeError, OSError):
-            pass
-    if bridge_pro_entry:
-        command = bridge_pro_entry.get("source", {}).get("command") if "source" in bridge_pro_entry else bridge_pro_entry.get("command")
-        asset_status = "installed" if command and "bridge-mcp" in str(command) else "mismatch"
+            asset_status = "mismatch"
+    if bridge_pro_entry and isinstance(marketplace, dict):
+        # Same structural checks as verify (entry source path, managed server by name, args, plugin version); the exact
+        # bundle command is compared when BRIDGE_PRO_BUNDLE_ROOT resolves, else it must at least be a bridge-mcp path.
+        from bridge_mcp import host_assets   # local import: host_assets imports this module
+        try:
+            command = host_assets._bundle_command(None)
+        except ValueError:
+            command = None
+        try:
+            asset_status, _ = host_assets._entry_state(marketplace, home / "plugins" / BRIDGE_PRO_PLUGIN_NAME, command,
+                                                       command_required=command is not None)
+        except (KeyError, TypeError):
+            asset_status = "mismatch"
     elif diy_entry:
         asset_status = "diy_only"
     return {"present": any(markers.values()), "markers": markers, "asset_status": asset_status, "bridge_pro_entry": bridge_pro_entry, "diy_entry": diy_entry}

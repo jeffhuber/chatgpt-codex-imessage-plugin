@@ -1,12 +1,25 @@
 """Tests for MCP host detection (MCP-8)."""
 from __future__ import annotations
 import pathlib
+import shutil
+import tempfile
 import unittest
 from bridge_mcp.host_detection import BRIDGE_PRO_PLUGIN_NAME, DIY_PLUGIN_NAME, detect_hosts, doctor_check_6_json
 
 class TestHostDetection(unittest.TestCase):
     def setUp(self):
-        self.fixtures = pathlib.Path(__file__).parent / "fixtures" / "host_detection"
+        temp_root = pathlib.Path(tempfile.gettempdir()).resolve()
+        self._fixtures_tmp = tempfile.TemporaryDirectory(dir=temp_root)
+        source = pathlib.Path(__file__).parent / "fixtures" / "host_detection"
+        self.fixtures = pathlib.Path(self._fixtures_tmp.name) / "host_detection"
+        shutil.copytree(source, self.fixtures)
+        for managed_file in self.fixtures.glob("*/plugins/bridge-pro-imessage/.mcp.json"):
+            managed_file.chmod(0o600)
+        for managed_file in self.fixtures.glob("*/plugins/bridge-pro-imessage/.codex-plugin/plugin.json"):
+            managed_file.chmod(0o600)
+
+    def tearDown(self):
+        self._fixtures_tmp.cleanup()
 
     def test_none_fixture(self):
         hosts = detect_hosts(home=self.fixtures / "none", path_env="/usr/bin")
