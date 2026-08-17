@@ -152,6 +152,9 @@ class HostAssetsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             host_assets("remove", host="chatgpt", home=self.home)
         self.assertTrue((victim / ".mcp.json").exists())
+        # Refused removal mutates nothing: the marketplace entry is still there.
+        names = [p["name"] for p in json.loads(self.marketplace.read_text())["plugins"]]
+        self.assertIn("bridge-pro-imessage", names)
 
     def test_wrong_source_path_is_mismatch_and_install_repairs(self):
         self._install()
@@ -192,6 +195,13 @@ class HostAssetsTests(unittest.TestCase):
         m["mcpServers"] = {"other": {"command": "/opt/bridge-mcp"}, "bridge-pro-imessage": {"command": "/usr/bin/true"}}
         mcp_path.write_text(json.dumps(m))
         self.assertEqual(host_assets("detect", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")
+
+    def test_configure_resets_protocol_compatibility(self):
+        from bridge_mcp import server
+        server._compatible_checked = True
+        server.configure(bridge_root=str(self.tmp / "bridge"))
+        self.assertFalse(server._compatible_checked); self.assertIsNone(server._client)
+        server.configure()   # back to defaults
 
     def test_cli_json_output(self):
         import io, contextlib

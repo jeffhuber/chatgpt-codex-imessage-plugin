@@ -226,17 +226,19 @@ def host_assets(subcommand: str, *, host: str | None = None, all_hosts: bool = F
         return {"ok": True, "hosts": hosts}
 
     if subcommand == "remove":
-        if marketplace_path.exists():
-            marketplace = _load_marketplace(marketplace_path)
-            marketplace["plugins"] = [p for p in marketplace["plugins"] if not (isinstance(p, dict) and p.get("name") == BRIDGE_PRO_PLUGIN_NAME)]
-            _write_json(marketplace_path, marketplace)
-        # Same symlink discipline as install: never traverse a symlinked plugin dir (or component) when deleting.
+        # Validate every removal target FIRST (same symlink discipline as install); only then mutate anything, so a
+        # refused removal leaves both the marketplace entry and the plugin files exactly as they were.
+        targets_to_unlink = [plugin_dir / name for name in (".mcp.json", ".codex-plugin/plugin.json")]
         if plugin_dir.exists() or plugin_dir.is_symlink():
             _reject_symlink_components(plugin_dir / ".codex-plugin")
-        for name in (".mcp.json", ".codex-plugin/plugin.json"):
-            target = plugin_dir / name
+        for target in targets_to_unlink:
             if target.is_symlink():
                 raise ValueError(f"refusing to remove symlink {target}")
+        marketplace = _load_marketplace(marketplace_path) if marketplace_path.exists() else None
+        if marketplace is not None:
+            marketplace["plugins"] = [p for p in marketplace["plugins"] if not (isinstance(p, dict) and p.get("name") == BRIDGE_PRO_PLUGIN_NAME)]
+            _write_json(marketplace_path, marketplace)
+        for target in targets_to_unlink:
             target.unlink(missing_ok=True)
         for directory in (plugin_dir / ".codex-plugin", plugin_dir):
             try:

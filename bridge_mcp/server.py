@@ -14,9 +14,10 @@ _configured_root: "pathlib.Path | None" = None
 
 def configure(product: str | None = None, bridge_root: str | None = None) -> None:
     """Select the bridge root before serving (bridge-mcp --product / --bridge-root)."""
-    global _configured_root, _client
+    global _configured_root, _client, _compatible_checked
     _configured_root = resolve_runtime_bridge(explicit_path=bridge_root, product=product) if (product or bridge_root) else None
     _client = None
+    _compatible_checked = False   # a different bridge must pass its own protocol check before any operation
 
 def _get_client() -> BridgeClient:
     global _client
