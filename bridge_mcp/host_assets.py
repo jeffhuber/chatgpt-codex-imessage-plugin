@@ -261,7 +261,12 @@ def _codex_plugin_add(codex_path: str | None) -> str:
         result = subprocess.run([exe, "plugin", "add", f"{BRIDGE_PRO_PLUGIN_NAME}@personal"], capture_output=True, text=True, timeout=60, check=False)
     except (OSError, subprocess.TimeoutExpired):
         return "failed:launch"
-    return "activated" if result.returncode == 0 else f"failed:{result.returncode}"
+    if result.returncode == 0:
+        return "activated"
+    combined_output = f"{result.stdout}\n{result.stderr}".lower()
+    if BRIDGE_PRO_PLUGIN_NAME in combined_output and ("already" in combined_output or "exist" in combined_output):
+        return "already-activated"
+    return f"failed:{result.returncode}"
 
 
 def host_assets(subcommand: str, *, host: str | None = None, all_hosts: bool = False, refresh: bool = False,
@@ -300,7 +305,7 @@ def host_assets(subcommand: str, *, host: str | None = None, all_hosts: bool = F
             if t == "codex":
                 activation = _codex_plugin_add(codex_path)
                 info["codex_activation"] = activation
-                if activation != "activated":
+                if activation not in ("activated", "already-activated"):
                     info["status"] = "mismatch"
                     info["reason"] = activation
             hosts[t] = info

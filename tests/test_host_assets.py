@@ -153,6 +153,11 @@ class HostAssetsTests(unittest.TestCase):
         self.assertEqual(out["hosts"]["codex"]["codex_activation"], "failed:3")
         self.assertEqual(out["hosts"]["codex"]["status"], "mismatch")
         self.assertFalse(out["ok"])
+        fake.write_text("#!/bin/sh\necho 'bridge-pro-imessage@personal already exists' >&2\nexit 3\n")
+        out = host_assets("install", host="codex", home=self.home, refresh=True, codex_path=str(fake))
+        self.assertEqual(out["hosts"]["codex"]["codex_activation"], "already-activated")
+        self.assertEqual(out["hosts"]["codex"]["status"], "installed")
+        self.assertTrue(out["ok"])
         # chatgpt target never runs codex.
         out = host_assets("install", host="chatgpt", home=self.home, refresh=True, codex_path=str(fake))
         self.assertNotIn("codex_activation", out["hosts"]["chatgpt"])
