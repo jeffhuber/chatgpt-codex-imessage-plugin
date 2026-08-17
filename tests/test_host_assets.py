@@ -173,6 +173,7 @@ class HostAssetsTests(unittest.TestCase):
             for k, v in saved.items():
                 if v is None: os.environ.pop(k, None)
                 else: os.environ[k] = v
+        self.assertIn("/Applications/Codex.app/Contents/Resources/codex", ha.KNOWN_CODEX_LOCATIONS)
 
     def test_non_personal_marketplace_is_rejected_and_null_source_is_mismatch(self):
         self.marketplace.parent.mkdir(parents=True, exist_ok=True)

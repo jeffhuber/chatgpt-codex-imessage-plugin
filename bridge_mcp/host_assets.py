@@ -225,7 +225,14 @@ def _entry_state(marketplace: dict[str, Any], plugin_dir: pathlib.Path, command:
 
 # Where the Codex CLI normally lives. The bundled launcher sanitizes PATH to /usr/bin:/bin, so PATH lookup alone
 # misses npm/Homebrew installs; the app may also pass an explicit --codex-path it trusts.
-KNOWN_CODEX_LOCATIONS = ("/opt/homebrew/bin/codex", "/usr/local/bin/codex", "~/.local/bin/codex", "~/.npm-global/bin/codex", "~/.codex/bin/codex")
+KNOWN_CODEX_LOCATIONS = (
+    "/Applications/Codex.app/Contents/Resources/codex",
+    "/opt/homebrew/bin/codex",
+    "/usr/local/bin/codex",
+    "~/.local/bin/codex",
+    "~/.npm-global/bin/codex",
+    "~/.codex/bin/codex",
+)
 
 
 def _resolve_codex(codex_path: str | None) -> str | None:
