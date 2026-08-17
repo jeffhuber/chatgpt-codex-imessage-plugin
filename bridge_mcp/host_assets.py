@@ -51,6 +51,9 @@ def _bundle_command(bundle_root: str | None) -> pathlib.Path:
     return command
 
 
+EXPECTED_SOURCE_PATH = f"./plugins/{BRIDGE_PRO_PLUGIN_NAME}"
+
+
 def _paths(home: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
     return home / ".agents" / "plugins" / "marketplace.json", home / "plugins" / BRIDGE_PRO_PLUGIN_NAME
 
@@ -122,6 +125,10 @@ def _entry_state(marketplace: dict[str, Any], plugin_dir: pathlib.Path, command:
     diy = next((p for p in marketplace["plugins"] if isinstance(p, dict) and p.get("name") == DIY_PLUGIN_NAME), None)
     if ours is None:
         return ("diy_only" if diy else "missing"), ours
+    # The entry must point at the fixed local plugin dir; otherwise the host loads nothing even if our files exist.
+    source = ours.get("source")
+    if not isinstance(source, dict) or source.get("source") != "local" or source.get("path") != EXPECTED_SOURCE_PATH:
+        return "mismatch", ours
     mcp_path = plugin_dir / ".mcp.json"
     try:
         servers = json.loads(mcp_path.read_text(encoding="utf-8"))
@@ -199,7 +206,7 @@ def host_assets(subcommand: str, *, host: str | None = None, all_hosts: bool = F
         if state != "installed" or refresh:
             _plugin_files(plugin_dir, command)
             entry = {"name": BRIDGE_PRO_PLUGIN_NAME,
-                     "source": {"source": "local", "path": f"./plugins/{BRIDGE_PRO_PLUGIN_NAME}"},
+                     "source": {"source": "local", "path": EXPECTED_SOURCE_PATH},
                      "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
                      "category": "Productivity"}
             marketplace["plugins"] = [p for p in marketplace["plugins"] if not (isinstance(p, dict) and p.get("name") == BRIDGE_PRO_PLUGIN_NAME)] + [entry]
@@ -217,8 +224,14 @@ def host_assets(subcommand: str, *, host: str | None = None, all_hosts: bool = F
             marketplace = _load_marketplace(marketplace_path)
             marketplace["plugins"] = [p for p in marketplace["plugins"] if not (isinstance(p, dict) and p.get("name") == BRIDGE_PRO_PLUGIN_NAME)]
             _write_json(marketplace_path, marketplace)
+        # Same symlink discipline as install: never traverse a symlinked plugin dir (or component) when deleting.
+        if plugin_dir.exists() or plugin_dir.is_symlink():
+            _reject_symlink_components(plugin_dir / ".codex-plugin")
         for name in (".mcp.json", ".codex-plugin/plugin.json"):
-            (plugin_dir / name).unlink(missing_ok=True)
+            target = plugin_dir / name
+            if target.is_symlink():
+                raise ValueError(f"refusing to remove symlink {target}")
+            target.unlink(missing_ok=True)
         for directory in (plugin_dir / ".codex-plugin", plugin_dir):
             try:
                 directory.rmdir()

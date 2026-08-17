@@ -143,6 +143,26 @@ class HostAssetsTests(unittest.TestCase):
         self.marketplace.write_text(json.dumps({"name": "personal", "plugins": [{"name": "bridge-pro-imessage", "source": None}]}))
         self.assertEqual(host_assets("detect", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")
 
+    def test_remove_refuses_symlinked_plugin_dir(self):
+        self._install()
+        real = self.home / "plugins" / "bridge-pro-imessage"
+        victim = self.tmp / "victim"; victim.mkdir(); (victim / ".mcp.json").write_text("{}")
+        import shutil
+        shutil.rmtree(real); real.symlink_to(victim)
+        with self.assertRaises(ValueError):
+            host_assets("remove", host="chatgpt", home=self.home)
+        self.assertTrue((victim / ".mcp.json").exists())
+
+    def test_wrong_source_path_is_mismatch_and_install_repairs(self):
+        self._install()
+        m = json.loads(self.marketplace.read_text())
+        m["plugins"][0]["source"] = {"source": "local", "path": "./plugins/elsewhere"}
+        self.marketplace.write_text(json.dumps(m))
+        self.assertEqual(host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")
+        self._install()   # non-refresh install must repair the broken entry
+        self.assertEqual(json.loads(self.marketplace.read_text())["plugins"][0]["source"]["path"], "./plugins/bridge-pro-imessage")
+        self.assertEqual(host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "installed")
+
     def test_cli_json_output(self):
         import io, contextlib
         buf = io.StringIO()
