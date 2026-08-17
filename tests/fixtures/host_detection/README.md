@@ -11,7 +11,7 @@ host detection without requiring actual installations.
 - `grok-cli-only/` - Only grok CLI marker
 - `mixed/` - Multiple hosts present
 - `diy-only/` - Only DIY chatgpt-codex-imessage-plugin (should NOT count as Bridge Pro)
-- `bridge-pro-valid/` - Valid Bridge Pro installation
+- `bridge-pro-valid/` - Valid Bridge Pro installation (marketplace entry + `plugins/bridge-pro-imessage/{.mcp.json,.codex-plugin/plugin.json}` as MCP-5 writes them; detection applies the same structural checks as `host-assets verify`)
 - `bridge-pro-mismatch/` - Bridge Pro entry with invalid command
 
 Each fixture has a simulated home directory structure.
