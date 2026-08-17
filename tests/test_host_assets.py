@@ -81,6 +81,43 @@ class HostAssetsTests(unittest.TestCase):
         out = host_assets("verify", host="codex", home=self.home)       # verify works without a bundle (status only)
         self.assertEqual(out["hosts"]["codex"]["status"], "missing")
 
+    def test_malformed_manifest_is_mismatch_and_refresh_repairs(self):
+        self._install()
+        mcp_path = self.home / "plugins/bridge-pro-imessage/.mcp.json"
+        for bad in ("[]", '{"mcpServers": []}', '{"mcpServers": {"bridge-pro-imessage": "nope"}}', "{}"):
+            mcp_path.write_text(bad)
+            self.assertEqual(host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch", bad)
+        (self.home / "plugins/bridge-pro-imessage/.codex-plugin/plugin.json").write_text("[]")
+        self.assertEqual(host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")
+        self._install(refresh=True)
+        self.assertEqual(host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "installed")
+
+    def test_existing_permissive_dirs_are_tightened(self):
+        plugin_dir = self.home / "plugins/bridge-pro-imessage"
+        (plugin_dir / ".codex-plugin").mkdir(parents=True)
+        os.chmod(plugin_dir, 0o755); os.chmod(plugin_dir / ".codex-plugin", 0o755)
+        self._install()
+        self.assertEqual(oct(plugin_dir.stat().st_mode & 0o777), "0o700")
+        self.assertEqual(oct((plugin_dir / ".codex-plugin").stat().st_mode & 0o777), "0o700")
+        self.assertEqual(oct(self.marketplace.parent.stat().st_mode & 0o777), "0o700")
+
+    def test_codex_activation_step(self):
+        # No codex on PATH → reported, not fatal.
+        out = host_assets("install", host="codex", home=self.home, codex_path=str(self.tmp / "missing-codex"))
+        self.assertEqual(out["hosts"]["codex"]["codex_activation"], "codex-not-found")
+        # A fake codex CLI records the exact argv and succeeds.
+        fake = self.tmp / "codex"; log = self.tmp / "codex.log"
+        fake.write_text(f"#!/bin/sh\nprintf '%s ' \"$@\" > {log}\nexit 0\n"); os.chmod(fake, 0o755)
+        out = host_assets("install", host="codex", home=self.home, refresh=True, codex_path=str(fake))
+        self.assertEqual(out["hosts"]["codex"]["codex_activation"], "activated")
+        self.assertEqual(log.read_text().strip(), "plugin add bridge-pro-imessage@personal")
+        fake.write_text("#!/bin/sh\nexit 3\n")
+        out = host_assets("install", host="codex", home=self.home, refresh=True, codex_path=str(fake))
+        self.assertEqual(out["hosts"]["codex"]["codex_activation"], "failed:3")
+        # chatgpt target never runs codex.
+        out = host_assets("install", host="chatgpt", home=self.home, refresh=True, codex_path=str(fake))
+        self.assertNotIn("codex_activation", out["hosts"]["chatgpt"])
+
     def test_cli_json_output(self):
         import io, contextlib
         buf = io.StringIO()

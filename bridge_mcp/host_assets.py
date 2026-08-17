@@ -14,7 +14,9 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import shutil
 import stat
+import subprocess
 import tempfile
 from typing import Any
 
@@ -65,9 +67,23 @@ def _load_marketplace(path: pathlib.Path) -> dict[str, Any]:
     return parsed
 
 
+def _ensure_private_dir(path: pathlib.Path) -> None:
+    """mkdir -p 0700 and, for pre-existing components we own, strip group/world bits."""
+    _reject_symlink_components(path)
+    path.mkdir(parents=True, mode=0o700, exist_ok=True)
+    current = path
+    for _ in range(3):   # the plugin dir and its parents we created: <home>/plugins/<name>[/.codex-plugin]
+        st = current.lstat()
+        if stat.S_ISDIR(st.st_mode) and st.st_uid == os.getuid() and (st.st_mode & 0o077):
+            os.chmod(current, 0o700)
+        if current.name in ("plugins", ".agents") or current == current.parent:
+            break
+        current = current.parent
+
+
 def _write_json(path: pathlib.Path, payload: dict[str, Any]) -> None:
     _reject_symlink_components(path)
-    path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+    _ensure_private_dir(path.parent)
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     temporary = pathlib.Path(temporary_name)
     try:
@@ -105,11 +121,15 @@ def _entry_state(marketplace: dict[str, Any], plugin_dir: pathlib.Path, command:
         return ("diy_only" if diy else "missing"), ours
     mcp_path = plugin_dir / ".mcp.json"
     try:
-        configured = json.loads(mcp_path.read_text(encoding="utf-8"))["mcpServers"]["bridge-pro-imessage"]
-    except (OSError, KeyError, json.JSONDecodeError):
+        servers = json.loads(mcp_path.read_text(encoding="utf-8"))
+        configured = servers["mcpServers"]["bridge-pro-imessage"] if isinstance(servers, dict) else None
+        if not isinstance(configured, dict):
+            return "mismatch", ours
+    except (OSError, KeyError, TypeError, AttributeError, json.JSONDecodeError):
         return "mismatch", ours
     try:
-        version = json.loads((plugin_dir / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")).get("version")
+        plugin_meta = json.loads((plugin_dir / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        version = plugin_meta.get("version") if isinstance(plugin_meta, dict) else None
     except (OSError, json.JSONDecodeError):
         version = None
     current = (command is None or configured.get("command") == str(command)) and \
@@ -117,8 +137,22 @@ def _entry_state(marketplace: dict[str, Any], plugin_dir: pathlib.Path, command:
     return ("installed" if current else "mismatch"), ours
 
 
+def _codex_plugin_add(codex_path: str | None) -> str:
+    """Documented activation step for Codex: `codex plugin add bridge-pro-imessage@personal`.
+    Fixed argv, no shell; only the resolved Codex CLI (from PATH or an explicit path). Reports what happened —
+    'activated', 'codex-not-found' (fine on ChatGPT-only Macs), or 'failed:<code>'."""
+    exe = codex_path or shutil.which("codex")
+    if not exe or not os.access(exe, os.X_OK):
+        return "codex-not-found"
+    try:
+        result = subprocess.run([exe, "plugin", "add", f"{BRIDGE_PRO_PLUGIN_NAME}@personal"], capture_output=True, text=True, timeout=60, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return "failed:launch"
+    return "activated" if result.returncode == 0 else f"failed:{result.returncode}"
+
+
 def host_assets(subcommand: str, *, host: str | None = None, all_hosts: bool = False, refresh: bool = False,
-                home: pathlib.Path | None = None, bundle_root: str | None = None) -> dict[str, Any]:
+                home: pathlib.Path | None = None, bundle_root: str | None = None, codex_path: str | None = None) -> dict[str, Any]:
     """Run one host-assets verb; returns the --json payload."""
     if subcommand not in ("detect", "install", "verify", "remove"):
         raise ValueError(f"unknown host-assets subcommand: {subcommand}")
@@ -147,7 +181,13 @@ def host_assets(subcommand: str, *, host: str | None = None, all_hosts: bool = F
                      "category": "Productivity"}
             marketplace["plugins"] = [p for p in marketplace["plugins"] if not (isinstance(p, dict) and p.get("name") == BRIDGE_PRO_PLUGIN_NAME)] + [entry]
             _write_json(marketplace_path, marketplace)
-        return {"ok": True, "hosts": {t: {"status": "installed", "version": VERSION, "path": str(command)} for t in targets}}
+        hosts: dict[str, Any] = {}
+        for t in targets:
+            info: dict[str, Any] = {"status": "installed", "version": VERSION, "path": str(command)}
+            if t == "codex":
+                info["codex_activation"] = _codex_plugin_add(codex_path)
+            hosts[t] = info
+        return {"ok": True, "hosts": hosts}
 
     if subcommand == "remove":
         if marketplace_path.exists():
