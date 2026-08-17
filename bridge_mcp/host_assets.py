@@ -64,6 +64,9 @@ def _load_marketplace(path: pathlib.Path) -> dict[str, Any]:
     parsed = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(parsed, dict) or not isinstance(parsed.get("plugins"), list):
         raise ValueError("existing marketplace must be an object with a plugins array")
+    if parsed.get("name") != "personal":
+        # Activation targets bridge-pro-imessage@personal; writing into any other marketplace would "succeed" and never activate.
+        raise ValueError("existing marketplace must be the Codex 'personal' marketplace")
     return parsed
 
 
@@ -137,12 +140,32 @@ def _entry_state(marketplace: dict[str, Any], plugin_dir: pathlib.Path, command:
     return ("installed" if current else "mismatch"), ours
 
 
+# Where the Codex CLI normally lives. The bundled launcher sanitizes PATH to /usr/bin:/bin, so PATH lookup alone
+# misses npm/Homebrew installs; the app may also pass an explicit --codex-path it trusts.
+KNOWN_CODEX_LOCATIONS = ("/opt/homebrew/bin/codex", "/usr/local/bin/codex", "~/.local/bin/codex", "~/.npm-global/bin/codex", "~/.codex/bin/codex")
+
+
+def _resolve_codex(codex_path: str | None) -> str | None:
+    candidates = [codex_path] if codex_path else [shutil.which("codex"), *(os.path.expanduser(c) for c in KNOWN_CODEX_LOCATIONS)]
+    for cand in candidates:
+        if not cand:
+            continue
+        try:
+            st = os.stat(cand)
+        except OSError:
+            continue
+        # Trusted only if a regular executable owned by root or us and not group/world-writable.
+        if stat.S_ISREG(st.st_mode) and st.st_uid in (0, os.getuid()) and not (st.st_mode & 0o022) and os.access(cand, os.X_OK):
+            return cand
+    return None
+
+
 def _codex_plugin_add(codex_path: str | None) -> str:
     """Documented activation step for Codex: `codex plugin add bridge-pro-imessage@personal`.
-    Fixed argv, no shell; only the resolved Codex CLI (from PATH or an explicit path). Reports what happened —
-    'activated', 'codex-not-found' (fine on ChatGPT-only Macs), or 'failed:<code>'."""
-    exe = codex_path or shutil.which("codex")
-    if not exe or not os.access(exe, os.X_OK):
+    Fixed argv, no shell; only the resolved Codex CLI (explicit path, PATH, or a known install location). Reports
+    what happened — 'activated', 'codex-not-found' (fine on ChatGPT-only Macs), or 'failed:<code>'."""
+    exe = _resolve_codex(codex_path)
+    if not exe:
         return "codex-not-found"
     try:
         result = subprocess.run([exe, "plugin", "add", f"{BRIDGE_PRO_PLUGIN_NAME}@personal"], capture_output=True, text=True, timeout=60, check=False)

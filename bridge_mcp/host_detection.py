@@ -53,7 +53,8 @@ def _detect_chatgpt_codex(home: pathlib.Path) -> dict[str, Any]:
             pass
     if bridge_pro_entry:
         # The marketplace entry only points at the plugin dir; the command lives in its .mcp.json.
-        command = bridge_pro_entry.get("source", {}).get("command") if "source" in bridge_pro_entry else bridge_pro_entry.get("command")
+        source = bridge_pro_entry.get("source")
+        command = source.get("command") if isinstance(source, dict) else bridge_pro_entry.get("command")
         if not command:
             try:
                 servers = json.loads((home / "plugins" / BRIDGE_PRO_PLUGIN_NAME / ".mcp.json").read_text(encoding="utf-8")).get("mcpServers", {})

@@ -118,6 +118,31 @@ class HostAssetsTests(unittest.TestCase):
         out = host_assets("install", host="chatgpt", home=self.home, refresh=True, codex_path=str(fake))
         self.assertNotIn("codex_activation", out["hosts"]["chatgpt"])
 
+    def test_codex_found_via_known_location_when_path_sanitized(self):
+        # The launcher sanitizes PATH; the CLI is still found under a known install location (here ~/.local/bin).
+        import bridge_mcp.host_assets as ha
+        cli = self.tmp / "codexhome" / ".local" / "bin" / "codex"; cli.parent.mkdir(parents=True)
+        cli.write_text("#!/bin/sh\nexit 0\n"); os.chmod(cli, 0o755)
+        env = {"PATH": "/usr/bin:/bin", "HOME": str(self.tmp / "codexhome")}
+        saved = {k: os.environ.get(k) for k in env}
+        try:
+            os.environ.update(env)
+            self.assertEqual(ha._resolve_codex(None), str(cli))
+            os.chmod(cli, 0o777)     # world-writable → not trusted
+            self.assertIsNone(ha._resolve_codex(None))
+        finally:
+            for k, v in saved.items():
+                if v is None: os.environ.pop(k, None)
+                else: os.environ[k] = v
+
+    def test_non_personal_marketplace_is_rejected_and_null_source_is_mismatch(self):
+        self.marketplace.parent.mkdir(parents=True, exist_ok=True)
+        self.marketplace.write_text(json.dumps({"name": "corp", "plugins": []}))
+        with self.assertRaises(ValueError):
+            self._install()
+        self.marketplace.write_text(json.dumps({"name": "personal", "plugins": [{"name": "bridge-pro-imessage", "source": None}]}))
+        self.assertEqual(host_assets("detect", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")
+
     def test_cli_json_output(self):
         import io, contextlib
         buf = io.StringIO()
