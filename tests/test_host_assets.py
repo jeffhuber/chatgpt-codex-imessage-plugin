@@ -225,6 +225,18 @@ class HostAssetsTests(unittest.TestCase):
             mode = (self.home / rel).lstat().st_mode & 0o777
             self.assertEqual(mode, 0o700, rel)
 
+    def test_minimal_existing_marketplace_gets_interface_and_transport_contract(self):
+        self.marketplace.parent.mkdir(parents=True, exist_ok=True)
+        self.marketplace.write_text(json.dumps({"name": "personal", "plugins": []}))
+        self._install()
+        self.assertEqual(json.loads(self.marketplace.read_text())["interface"], {"displayName": "Personal"})
+        # Documented transports parse; unimplemented ones are refused only when selected (exit 2, not argparse's 2-with-usage).
+        import io, contextlib
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            rc = bridge_mcp_main.main(["--product", "openai", "--transport", "socket"])
+        self.assertEqual(rc, 2); self.assertIn("MCP-13", err.getvalue())
+
     def test_cli_json_output(self):
         import io, contextlib
         buf = io.StringIO()

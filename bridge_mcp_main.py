@@ -32,8 +32,13 @@ def main(argv: list[str] | None = None) -> int:
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--product", choices=["claude", "grok", "openai"])
     group.add_argument("--bridge-root")
-    parser.add_argument("--transport", choices=["launchd"], default="launchd")   # socket client is MCP-13
+    # Documented contract: launchd | direct | socket. Only launchd is implemented today; the others are accepted
+    # (so launchers built against the contract keep working) and rejected only when actually selected.
+    parser.add_argument("--transport", choices=["launchd", "direct", "socket"], default="launchd")   # socket client is MCP-13
     args = parser.parse_args(argv)
+    if args.transport != "launchd":
+        print(f"bridge-mcp: transport '{args.transport}' is not implemented yet (MCP-13); use --transport launchd", file=sys.stderr)
+        return 2
     from bridge_mcp.server import run_server
     run_server(product=args.product, bridge_root=args.bridge_root)
     return 0

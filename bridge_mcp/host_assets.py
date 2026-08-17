@@ -78,6 +78,9 @@ def _load_marketplace(path: pathlib.Path) -> dict[str, Any]:
     if parsed.get("name") != "personal":
         # Activation targets bridge-pro-imessage@personal; writing into any other marketplace would "succeed" and never activate.
         raise ValueError("existing marketplace must be the Codex 'personal' marketplace")
+    # A minimal existing manifest may lack the interface block Codex uses to display the marketplace; fill the default.
+    if not isinstance(parsed.get("interface"), dict):
+        parsed["interface"] = {"displayName": "Personal"}
     return parsed
 
 
