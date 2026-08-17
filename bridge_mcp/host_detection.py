@@ -52,7 +52,14 @@ def _detect_chatgpt_codex(home: pathlib.Path) -> dict[str, Any]:
         except (json.JSONDecodeError, OSError):
             pass
     if bridge_pro_entry:
+        # The marketplace entry only points at the plugin dir; the command lives in its .mcp.json.
         command = bridge_pro_entry.get("source", {}).get("command") if "source" in bridge_pro_entry else bridge_pro_entry.get("command")
+        if not command:
+            try:
+                servers = json.loads((home / "plugins" / BRIDGE_PRO_PLUGIN_NAME / ".mcp.json").read_text(encoding="utf-8")).get("mcpServers", {})
+                command = next(iter(servers.values()), {}).get("command")
+            except (OSError, json.JSONDecodeError, AttributeError):
+                command = None
         asset_status = "installed" if command and "bridge-mcp" in str(command) else "mismatch"
     elif diy_entry:
         asset_status = "diy_only"
