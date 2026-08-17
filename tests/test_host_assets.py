@@ -175,6 +175,9 @@ class HostAssetsTests(unittest.TestCase):
             self._install()
         self.marketplace.write_text(json.dumps({"name": "personal", "plugins": [{"name": "bridge-pro-imessage", "source": None}]}))
         self.assertEqual(host_assets("detect", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")
+        for malformed in ([], {"name": "personal", "plugins": {}}, {"name": "personal"}):
+            self.marketplace.write_text(json.dumps(malformed))
+            self.assertEqual(host_assets("detect", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")
 
     def test_remove_refuses_symlinked_plugin_dir(self):
         self._install()
@@ -186,6 +189,15 @@ class HostAssetsTests(unittest.TestCase):
             host_assets("remove", host="chatgpt", home=self.home)
         self.assertTrue((victim / ".mcp.json").exists())
         # Refused removal mutates nothing: the marketplace entry is still there.
+        names = [p["name"] for p in json.loads(self.marketplace.read_text())["plugins"]]
+        self.assertIn("bridge-pro-imessage", names)
+
+    def test_remove_refuses_non_regular_managed_files_before_marketplace_mutation(self):
+        self._install()
+        mcp = self.home / "plugins/bridge-pro-imessage/.mcp.json"
+        mcp.unlink(); mcp.mkdir()
+        with self.assertRaises(ValueError):
+            host_assets("remove", host="chatgpt", home=self.home)
         names = [p["name"] for p in json.loads(self.marketplace.read_text())["plugins"]]
         self.assertIn("bridge-pro-imessage", names)
 

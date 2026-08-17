@@ -43,17 +43,21 @@ def _detect_chatgpt_codex(home: pathlib.Path) -> dict[str, Any]:
     if markers["marketplace_json"]:
         try:
             marketplace = json.loads(marketplace_path.read_text(encoding="utf-8"))
-            for plugin in marketplace.get("plugins", []):
-                if not isinstance(plugin, dict):
-                    continue
-                name = plugin.get("name")
-                if name == BRIDGE_PRO_PLUGIN_NAME:
-                    bridge_pro_entry = plugin
-                elif name == DIY_PLUGIN_NAME:
-                    diy_entry = plugin
+            plugins = marketplace.get("plugins") if isinstance(marketplace, dict) else None
+            if not isinstance(plugins, list):
+                asset_status = "mismatch"
+            else:
+                for plugin in plugins:
+                    if not isinstance(plugin, dict):
+                        continue
+                    name = plugin.get("name")
+                    if name == BRIDGE_PRO_PLUGIN_NAME:
+                        bridge_pro_entry = plugin
+                    elif name == DIY_PLUGIN_NAME:
+                        diy_entry = plugin
         except (json.JSONDecodeError, OSError):
-            pass
-    if bridge_pro_entry:
+            asset_status = "mismatch"
+    if bridge_pro_entry and isinstance(marketplace, dict):
         # Same structural checks as verify (entry source path, managed server by name, args, plugin version); the exact
         # bundle command is compared when BRIDGE_PRO_BUNDLE_ROOT resolves, else it must at least be a bridge-mcp path.
         from bridge_mcp import host_assets   # local import: host_assets imports this module

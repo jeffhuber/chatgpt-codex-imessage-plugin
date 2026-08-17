@@ -156,6 +156,16 @@ def _managed_json_file_is_safe(path: pathlib.Path) -> bool:
     return stat.S_ISREG(st.st_mode) and st.st_uid == os.getuid() and not (st.st_mode & 0o077)
 
 
+def _validate_managed_file_removal(path: pathlib.Path) -> None:
+    _reject_symlink_components(path)
+    try:
+        st = path.lstat()
+    except FileNotFoundError:
+        return
+    if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid():
+        raise ValueError(f"refusing to remove unsafe managed file: {path}")
+
+
 def _command_has_bridge_app_shape(value: Any) -> bool:
     if not isinstance(value, str):
         return False
@@ -291,8 +301,7 @@ def host_assets(subcommand: str, *, host: str | None = None, all_hosts: bool = F
         if plugin_dir.exists() or plugin_dir.is_symlink():
             _reject_symlink_components(plugin_dir / ".codex-plugin")
         for target in targets_to_unlink:
-            if target.is_symlink():
-                raise ValueError(f"refusing to remove symlink {target}")
+            _validate_managed_file_removal(target)
         marketplace = _load_marketplace(marketplace_path) if marketplace_path.exists() else None
         if marketplace is not None:
             marketplace["plugins"] = [p for p in marketplace["plugins"] if not (isinstance(p, dict) and p.get("name") == BRIDGE_PRO_PLUGIN_NAME)]
