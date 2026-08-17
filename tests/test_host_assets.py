@@ -41,6 +41,8 @@ class HostAssetsTests(unittest.TestCase):
         self.assertEqual(host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "installed")
         self.assertEqual(host_assets("detect", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "installed")
         out = host_assets("remove", host="chatgpt", home=self.home)
+        # Shared asset: removal is reported for BOTH hosts, never silently for one.
+        self.assertTrue(out["shared_asset"]); self.assertEqual(set(out["hosts"]), {"chatgpt", "codex"})
         self.assertEqual(out["hosts"]["chatgpt"]["status"], "missing")
         self.assertFalse((self.home / "plugins/bridge-pro-imessage").exists())
         self.assertEqual([p["name"] for p in json.loads(self.marketplace.read_text())["plugins"]], [])

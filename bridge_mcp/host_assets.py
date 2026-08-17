@@ -257,7 +257,9 @@ def host_assets(subcommand: str, *, host: str | None = None, all_hosts: bool = F
                 directory.rmdir()
             except OSError:
                 pass   # non-empty: user files stay
-        return {"ok": True, "hosts": {t: {"status": "missing"} for t in targets}}
+        # The marketplace entry + plugin dir are ONE shared asset for ChatGPT and Codex: removing it removes it for
+        # both, so the report says so explicitly rather than pretending the other host is untouched.
+        return {"ok": True, "shared_asset": True, "hosts": {t: {"status": "missing"} for t in SUPPORTED_HOSTS}}
 
     # verify
     try:

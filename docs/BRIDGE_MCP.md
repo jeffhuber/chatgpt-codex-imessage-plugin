@@ -25,6 +25,8 @@ This document specifies the contract between Bridge Pro (the macOS `.app` bundle
 ```bash
 bridge-mcp --product <claude|grok|openai> [--transport launchd|direct|socket]
 bridge-mcp host-assets {detect|install|verify|remove} [--host <id>|--all] [--refresh] --json
+# chatgpt and codex share ONE asset (personal marketplace entry + plugin dir): `remove` removes it for both
+# and reports both hosts as missing; `install --host codex` additionally runs `codex plugin add`.
 bridge-mcp --bridge-root <path>        # DIY-only, mutually exclusive with --product
 ```
 
