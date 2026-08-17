@@ -69,9 +69,12 @@ def _paths(home: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
 def _load_marketplace(path: pathlib.Path) -> dict[str, Any]:
     if not path.exists():
         return {"name": "personal", "interface": {"displayName": "Personal"}, "plugins": []}
+    _reject_symlink_components(path)
     metadata = path.lstat()
     if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.getuid():
         raise ValueError("existing marketplace must be a current-user-owned regular file")
+    if metadata.st_mode & 0o077:
+        os.chmod(path, 0o600)
     parsed = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(parsed, dict) or not isinstance(parsed.get("plugins"), list):
         raise ValueError("existing marketplace must be an object with a plugins array")
@@ -347,4 +350,14 @@ def host_assets(subcommand: str, *, host: str | None = None, all_hosts: bool = F
     if state == "installed":
         result["version"] = VERSION
         result["path"] = str(command) if command else None
-    return {"ok": state in ("installed", "not_applicable"), "hosts": {t: dict(result) for t in targets}}
+    hosts: dict[str, Any] = {}
+    for t in targets:
+        host_result = dict(result)
+        if t == "codex" and host_result["status"] == "installed":
+            activation = _codex_plugin_add(codex_path)
+            host_result["codex_activation"] = activation
+            if activation not in ("activated", "already-activated"):
+                host_result["status"] = "mismatch"
+                host_result["reason"] = activation
+        hosts[t] = host_result
+    return {"ok": all(info["status"] in ("installed", "not_applicable") for info in hosts.values()), "hosts": hosts}

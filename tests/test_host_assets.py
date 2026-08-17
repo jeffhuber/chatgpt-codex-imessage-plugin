@@ -121,6 +121,12 @@ class HostAssetsTests(unittest.TestCase):
         self.assertEqual(oct(plugin_json.lstat().st_mode & 0o777), "0o600")
         self.assertEqual(host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "installed")
 
+    def test_permissive_existing_marketplace_is_tightened_before_success(self):
+        self._install()
+        os.chmod(self.marketplace, 0o666)
+        self.assertEqual(host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "installed")
+        self.assertEqual(oct(self.marketplace.lstat().st_mode & 0o777), "0o600")
+
     def test_symlinked_managed_files_are_not_treated_as_current(self):
         self._install()
         mcp = self.home / "plugins/bridge-pro-imessage/.mcp.json"
@@ -161,6 +167,18 @@ class HostAssetsTests(unittest.TestCase):
         # chatgpt target never runs codex.
         out = host_assets("install", host="chatgpt", home=self.home, refresh=True, codex_path=str(fake))
         self.assertNotIn("codex_activation", out["hosts"]["chatgpt"])
+
+    def test_codex_verify_reports_activation_failure(self):
+        self._install()
+        out = host_assets("verify", host="codex", home=self.home, codex_path=str(self.tmp / "missing-codex"))
+        self.assertFalse(out["ok"])
+        self.assertEqual(out["hosts"]["codex"]["status"], "mismatch")
+        self.assertEqual(out["hosts"]["codex"]["reason"], "codex-not-found")
+        fake = self.tmp / "codex-already"; fake.write_text("#!/bin/sh\necho 'bridge-pro-imessage@personal already exists' >&2\nexit 3\n"); os.chmod(fake, 0o755)
+        out = host_assets("verify", host="codex", home=self.home, codex_path=str(fake))
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["hosts"]["codex"]["status"], "installed")
+        self.assertEqual(out["hosts"]["codex"]["codex_activation"], "already-activated")
 
     def test_codex_found_via_known_location_when_path_sanitized(self):
         # The launcher sanitizes PATH; the CLI is still found under a known install location (here ~/.local/bin).
