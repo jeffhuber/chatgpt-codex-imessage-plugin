@@ -110,6 +110,13 @@ def _ensure_private_dir(path: pathlib.Path) -> None:
 def _write_json(path: pathlib.Path, payload: dict[str, Any]) -> None:
     _reject_symlink_components(path)
     _ensure_private_dir(path.parent)
+    try:
+        existing = path.lstat()
+    except FileNotFoundError:
+        pass
+    else:
+        if not stat.S_ISREG(existing.st_mode) or existing.st_uid != os.getuid():
+            raise ValueError(f"refusing to replace unsafe managed file: {path}")
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     temporary = pathlib.Path(temporary_name)
     try:
@@ -140,6 +147,15 @@ def _plugin_files(plugin_dir: pathlib.Path, command: pathlib.Path) -> None:
         "interface": {"displayName": "Bridge Pro iMessage", "category": "Productivity"}})
 
 
+def _managed_json_file_is_safe(path: pathlib.Path) -> bool:
+    try:
+        _reject_symlink_components(path)
+        st = path.lstat()
+    except (FileNotFoundError, ValueError):
+        return False
+    return stat.S_ISREG(st.st_mode) and st.st_uid == os.getuid() and not (st.st_mode & 0o077)
+
+
 def _entry_state(marketplace: dict[str, Any], plugin_dir: pathlib.Path, command: pathlib.Path | None,
                  *, command_required: bool = True) -> tuple[str, dict[str, Any] | None]:
     """Shared by verify (command_required) and detect (structural check; command compared only when resolvable)."""
@@ -152,6 +168,8 @@ def _entry_state(marketplace: dict[str, Any], plugin_dir: pathlib.Path, command:
     if not isinstance(source, dict) or source.get("source") != "local" or source.get("path") != EXPECTED_SOURCE_PATH:
         return "mismatch", ours
     mcp_path = plugin_dir / ".mcp.json"
+    if not _managed_json_file_is_safe(mcp_path):
+        return "mismatch", ours
     try:
         servers = json.loads(mcp_path.read_text(encoding="utf-8"))
         configured = servers["mcpServers"]["bridge-pro-imessage"] if isinstance(servers, dict) else None
@@ -159,8 +177,11 @@ def _entry_state(marketplace: dict[str, Any], plugin_dir: pathlib.Path, command:
             return "mismatch", ours
     except (OSError, KeyError, TypeError, AttributeError, json.JSONDecodeError):
         return "mismatch", ours
+    plugin_meta_path = plugin_dir / ".codex-plugin" / "plugin.json"
+    if not _managed_json_file_is_safe(plugin_meta_path):
+        return "mismatch", ours
     try:
-        plugin_meta = json.loads((plugin_dir / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        plugin_meta = json.loads(plugin_meta_path.read_text(encoding="utf-8"))
         version = plugin_meta.get("version") if isinstance(plugin_meta, dict) else None
     except (OSError, json.JSONDecodeError):
         version = None

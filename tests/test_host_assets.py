@@ -103,6 +103,31 @@ class HostAssetsTests(unittest.TestCase):
         self.assertEqual(oct((plugin_dir / ".codex-plugin").stat().st_mode & 0o777), "0o700")
         self.assertEqual(oct(self.marketplace.parent.stat().st_mode & 0o777), "0o700")
 
+    def test_existing_permissive_files_are_mismatch_and_install_repairs(self):
+        self._install()
+        mcp = self.home / "plugins/bridge-pro-imessage/.mcp.json"
+        plugin_json = self.home / "plugins/bridge-pro-imessage/.codex-plugin/plugin.json"
+        os.chmod(mcp, 0o644); os.chmod(plugin_json, 0o644)
+        self.assertEqual(host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")
+        self.assertEqual(host_assets("detect", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")
+        self._install()
+        self.assertEqual(oct(mcp.lstat().st_mode & 0o777), "0o600")
+        self.assertEqual(oct(plugin_json.lstat().st_mode & 0o777), "0o600")
+        self.assertEqual(host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "installed")
+
+    def test_symlinked_managed_files_are_not_treated_as_current(self):
+        self._install()
+        mcp = self.home / "plugins/bridge-pro-imessage/.mcp.json"
+        target = self.tmp / "outside-mcp.json"
+        target.write_text(mcp.read_text())
+        mcp.unlink(); mcp.symlink_to(target)
+        self.assertEqual(host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")
+        self.assertEqual(host_assets("detect", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "mismatch")
+        with self.assertRaises(ValueError):
+            self._install()
+        self.assertTrue(mcp.is_symlink())
+        self.assertEqual(json.loads(target.read_text())["mcpServers"]["bridge-pro-imessage"]["args"], ["--product", "openai"])
+
     def test_codex_activation_step(self):
         # No codex on PATH → reported, not fatal.
         out = host_assets("install", host="codex", home=self.home, codex_path=str(self.tmp / "missing-codex"))
