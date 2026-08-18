@@ -453,9 +453,11 @@ def _grok_install(home: pathlib.Path, command: pathlib.Path, *, grok_path: str |
 
 def _grok_verify(home: pathlib.Path, command: pathlib.Path | None, *, grok_path: str | None = None) -> dict[str, Any]:
     grok_exe = _resolve_grok(grok_path, home)
-    if command is not None and grok_exe:
+    if grok_exe:
         registered = _grok_registered(grok_exe)
-        if registered is True:
+        if registered is True and command is None:
+            return {"status": "mismatch", "method": "mcp_cli", "reason": "bundle-unresolved"}
+        if registered is True and command is not None:
             show_matches = _grok_show_matches(grok_exe, command)
             if show_matches is True:
                 return {"status": "installed", "method": "mcp_cli", "version": VERSION, "path": str(command)}

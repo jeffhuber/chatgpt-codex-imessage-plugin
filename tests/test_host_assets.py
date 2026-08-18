@@ -316,6 +316,22 @@ class HostAssetsTests(unittest.TestCase):
         self.assertEqual(verified["hosts"]["grok"]["status"], "installed")
         self.assertIn([fake_grok, "mcp", "add", "bridge-pro-imessage", "--command", str(self.bundle / "Contents/MacOS/bridge-mcp"), "--args", "--product", "grok"], calls)
 
+    def test_grok_verify_registered_cli_with_unresolved_bundle_is_mismatch(self):
+        fake_grok = str(self.tmp / "grok")
+
+        def fake_run(args, **_kwargs):
+            if args[1:3] == ["mcp", "list"]:
+                return mock.Mock(returncode=0, stdout="bridge-pro-imessage\n", stderr="")
+            return mock.Mock(returncode=1, stdout="", stderr="")
+
+        os.environ.pop("BRIDGE_PRO_BUNDLE_ROOT")
+        with mock.patch("bridge_mcp.host_assets._resolve_grok", return_value=fake_grok), \
+             mock.patch("subprocess.run", side_effect=fake_run):
+            out = host_assets("verify", host="grok", home=self.home)
+        self.assertFalse(out["ok"])
+        self.assertEqual(out["hosts"]["grok"]["status"], "mismatch")
+        self.assertEqual(out["hosts"]["grok"]["reason"], "bundle-unresolved")
+
     def test_grok_exact_name_matching(self):
         import bridge_mcp.host_assets as ha
         self.assertFalse(ha._is_mcp_registered("bridge-pro-imessage-old\nother\n", "bridge-pro-imessage"))
