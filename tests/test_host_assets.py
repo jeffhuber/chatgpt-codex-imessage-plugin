@@ -272,6 +272,7 @@ class HostAssetsTests(unittest.TestCase):
         self.assertEqual(out["hosts"]["chatgpt"]["status"], "mismatch")
 
     def test_grok_fallback_is_partial_not_installed(self):
+        os.chmod(self.home, 0o755)
         with mock.patch("bridge_mcp.host_assets._resolve_grok", return_value=None):
             out = host_assets("install", host="grok", home=self.home)
         self.assertFalse(out["ok"])
@@ -279,6 +280,10 @@ class HostAssetsTests(unittest.TestCase):
         self.assertEqual(out["hosts"]["grok"]["method"], "skill_dir")
         manifest_path = self.home / ".grok/skills/bridge-pro-imessage/manifest.json"
         self.assertTrue(manifest_path.exists())
+        self.assertEqual(oct(self.home.stat().st_mode & 0o777), "0o755")
+        self.assertEqual(oct((self.home / ".grok").stat().st_mode & 0o777), "0o700")
+        self.assertEqual(oct((self.home / ".grok/skills").stat().st_mode & 0o777), "0o700")
+        self.assertEqual(oct((self.home / ".grok/skills/bridge-pro-imessage").stat().st_mode & 0o777), "0o700")
         manifest = json.loads(manifest_path.read_text())
         self.assertEqual(manifest["command"], str(self.bundle / "Contents/MacOS/bridge-mcp"))
         self.assertEqual(manifest["args"], ["--product", "grok"])

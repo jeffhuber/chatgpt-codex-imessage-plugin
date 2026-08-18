@@ -309,6 +309,59 @@ def _grok_skill_paths(home: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path, p
     return skill_root, skill_dir, skill_dir / "manifest.json"
 
 
+def _ensure_grok_skill_dir(home: pathlib.Path) -> pathlib.Path:
+    grok_dir = home / ".grok"
+    skill_root = grok_dir / "skills"
+    skill_dir = skill_root / BRIDGE_PRO_PLUGIN_NAME
+    for directory in (grok_dir, skill_root, skill_dir):
+        _reject_symlink_components(directory)
+        try:
+            st = directory.lstat()
+        except FileNotFoundError:
+            directory.mkdir(mode=0o700)
+            os.chmod(directory, 0o700)
+            continue
+        if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid():
+            raise ValueError(f"refusing unsafe Grok skill directory: {directory}")
+        if st.st_mode & 0o077:
+            os.chmod(directory, 0o700)
+    return skill_dir
+
+
+def _write_json_existing_private_parent(path: pathlib.Path, payload: dict[str, Any]) -> None:
+    _reject_symlink_components(path)
+    try:
+        parent_st = path.parent.lstat()
+    except FileNotFoundError:
+        raise ValueError(f"managed parent directory does not exist: {path.parent}") from None
+    if not stat.S_ISDIR(parent_st.st_mode) or parent_st.st_uid != os.getuid() or (parent_st.st_mode & 0o077):
+        raise ValueError(f"managed parent directory is not private: {path.parent}")
+    try:
+        existing = path.lstat()
+    except FileNotFoundError:
+        pass
+    else:
+        if not stat.S_ISREG(existing.st_mode) or existing.st_uid != os.getuid():
+            raise ValueError(f"refusing to replace unsafe managed file: {path}")
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    temporary = pathlib.Path(temporary_name)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8", closefd=False) as handle:
+            json.dump(payload, handle, indent=2, ensure_ascii=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.close(descriptor)
+        descriptor = -1
+        os.replace(temporary, path)
+        os.chmod(path, 0o600)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        temporary.unlink(missing_ok=True)
+
+
 def _is_mcp_registered(mcp_list_output: str, server_name: str) -> bool:
     """Match Grok MCP server names exactly; similar names must not count."""
     for line in mcp_list_output.splitlines():
@@ -370,10 +423,9 @@ def _grok_fallback_state(home: pathlib.Path, command: pathlib.Path | None,
 
 
 def _write_grok_fallback(home: pathlib.Path, command: pathlib.Path) -> None:
-    skill_root, skill_dir, manifest_path = _grok_skill_paths(home)
-    _reject_symlink_components(skill_root)
-    _ensure_private_dir(skill_dir)
-    _write_json(manifest_path, {
+    _, _, manifest_path = _grok_skill_paths(home)
+    _ensure_grok_skill_dir(home)
+    _write_json_existing_private_parent(manifest_path, {
         "name": BRIDGE_PRO_PLUGIN_NAME,
         "version": VERSION,
         "command": str(command),
