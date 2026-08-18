@@ -78,7 +78,7 @@ cleanup() {
 trap cleanup EXIT
 
 mkdir -p "$STAGING/scripts"
-for directory in .codex-plugin plugin_server skills; do
+for directory in .codex-plugin bridge_mcp plugin_server skills; do
     cp -R "$SOURCE_ROOT/$directory" "$STAGING/$directory"
 done
 cp "$SOURCE_ROOT/.mcp.json" "$STAGING/.mcp.json"

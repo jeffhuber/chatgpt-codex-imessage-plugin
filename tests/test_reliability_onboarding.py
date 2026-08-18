@@ -629,6 +629,7 @@ class PluginInstallTests(unittest.TestCase):
         self.assertIn('MARKETPLACE="$HOME/.agents/plugins/marketplace.json"', script)
         self.assertIn('MCP_VENV="$BRIDGE_ROOT/mcp-venv"', script)
         self.assertIn('PYTHON="$(find_mcp_python "$PATH")"', script)
+        self.assertIn("for directory in .codex-plugin bridge_mcp plugin_server skills", script)
         self.assertIn('plugin add "$PLUGIN_NAME@personal"', script)
 
     def test_main_installer_supports_skipping_plugin_install(self) -> None:
@@ -800,13 +801,19 @@ class BridgePathResolutionTests(unittest.TestCase):
             bridge = Path(td).resolve() / "Bridge With Spaces"
             python = bridge / "mcp-venv" / "bin" / "python"
             python.parent.mkdir(parents=True)
-            python.write_text('#!/bin/sh\nprintf "ran\\n" > "$MARKER"\n')
+            python.write_text(
+                '#!/bin/sh\n'
+                'printf "ran\\n" > "$MARKER"\n'
+                'printf "%s\\n" "$CHATGPT_CODEX_IMESSAGE_BRIDGE" > "$BRIDGE_MARKER"\n'
+            )
             python.chmod(0o700)
             (plugin / "bridge-path").write_text(f"{bridge}\n")
             marker = Path(td) / "marker"
+            bridge_marker = Path(td) / "bridge-marker"
             env = os.environ.copy()
             env.pop("CHATGPT_CODEX_IMESSAGE_BRIDGE", None)
             env["MARKER"] = str(marker)
+            env["BRIDGE_MARKER"] = str(bridge_marker)
 
             result = subprocess.run(
                 ["bash", str(launcher)],
@@ -817,6 +824,7 @@ class BridgePathResolutionTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(marker.read_text(), "ran\n")
+            self.assertEqual(bridge_marker.read_text(), f"{bridge}\n")
 
     def test_source_checkout_launcher_has_an_install_hint(self) -> None:
         result = subprocess.run(

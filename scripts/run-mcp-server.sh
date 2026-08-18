@@ -13,6 +13,7 @@ source "$BRIDGE_RESOLVER"
 if ! BRIDGE_ROOT="$(resolve_runtime_bridge "$PLUGIN_ROOT/bridge-path" "$HOME/Library/Application Support/ChatGPTCodexIMessage")"; then
     exit 1
 fi
+export CHATGPT_CODEX_IMESSAGE_BRIDGE="$BRIDGE_ROOT"
 
 PYTHON="$BRIDGE_ROOT/mcp-venv/bin/python"
 SERVER="$PLUGIN_ROOT/plugin_server/server.py"
