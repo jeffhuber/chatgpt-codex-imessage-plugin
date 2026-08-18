@@ -5,8 +5,11 @@ The file-bridge protocol has its own major/minor compatibility version.
 
 ## Unreleased
 
-## 1.3.0 - 2026-08-16
+## 1.3.0 - 2026-08-18
 
+- Fix live-install MCP startup after reinstall by exporting the resolved bridge
+  path from the installed launcher and staging the `bridge_mcp` package in the
+  plugin bundle.
 - Bridge protocol 1.2: add the `list_chats` action, which enumerates threads
   with recent activity for policy discovery and never selects message bodies
   (a sentinel-body fixture asserts this); add worker-enforced bridge roles
