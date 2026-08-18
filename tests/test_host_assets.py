@@ -446,6 +446,20 @@ class HostAssetsTests(unittest.TestCase):
         self.assertEqual(sorted(payload["hosts"]), ["chatgpt", "codex", "grok"])
         self.assertIn(rc, (0, 1))
 
+    def test_cli_accepts_grok_host(self):
+        import io, contextlib
+        buf = io.StringIO()
+        with mock.patch("bridge_mcp.host_assets.pathlib.Path.home", return_value=self.home), \
+             contextlib.redirect_stdout(buf):
+            rc = bridge_mcp_main.main([
+                "host-assets", "install", "--host", "grok", "--grok-path", str(self.tmp / "missing-grok"), "--json"
+            ])
+        payload = json.loads(buf.getvalue())
+        self.assertEqual(rc, 1)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["hosts"]["grok"]["status"], "partial")
+        self.assertTrue((self.home / ".grok/skills/bridge-pro-imessage/manifest.json").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
