@@ -14,7 +14,7 @@ This document specifies the contract between Bridge Pro (the macOS `.app` bundle
 - Stdlib-only implementation requirements
 - Byte compatibility with the current `plugin_server/server.py` implementation
 - Launcher security model
-- `host-assets` command for ChatGPT/Codex plugin manifest installation
+- `host-assets` command for ChatGPT/Codex plugin manifest installation and Grok MCP registration
 - Environment and argument sanitization (security sign-off target)
 - Backward-compatible change classification
 
@@ -27,6 +27,7 @@ bridge-mcp --product <claude|grok|openai> [--transport launchd|direct|socket]
 bridge-mcp host-assets {detect|install|verify|remove} [--host <id>|--all] [--refresh] --json
 # chatgpt and codex share ONE asset (personal marketplace entry + plugin dir): `remove` removes it for both
 # and reports both hosts as missing; `install --host codex` additionally runs `codex plugin add`.
+# grok uses `grok mcp add` as the only green install path; the skill-dir manifest fallback is reported as partial.
 bridge-mcp --bridge-root <path>        # DIY-only, mutually exclusive with --product
 ```
 
@@ -191,38 +192,44 @@ This is macOS-only.
 
 ## `host-assets` Command
 
-The `host-assets` subcommand manages MCP plugin manifests for ChatGPT, Codex, and other OpenAI-based hosts. It is the successor to `tools/install_plugin_manifest.py`.
+The `host-assets` subcommand manages MCP plugin manifests for ChatGPT, Codex, and Grok. It is the successor to `tools/install_plugin_manifest.py` and the Bridge Pro-local Grok configurator.
 
 ### Behavior
 
 **Subcommands:**
 
-- `detect`: Scan `~/plugins/` and `~/.agents/plugins/marketplace.json` for existing bridge-mcp manifests. Report which hosts have manifests installed and whether they are current.
+- `detect`: Scan host-specific MCP registrations for existing bridge-mcp manifests. Report which hosts have manifests installed and whether they are current.
 
 - `install`: Write or update the plugin manifest for the specified host(s):
-  - Plugin name: `bridge-pro-imessage`
-  - Destination: `~/plugins/bridge-pro-imessage/`
-  - Manifest: Atomic 0600 write of `~/.agents/plugins/marketplace.json`, preserving other plugins
-  - `.mcp.json` schema:
-    ```json
-    {
-      "command": "<absolute-path-to-bundle>/Contents/MacOS/bridge-mcp",
-      "args": ["--product", "openai"],
-      "startup_timeout_sec": 15,
-      "tool_timeout_sec": 90,
-      "default_tools_approval_mode": "writes"
-    }
-    ```
-  - After writing `.mcp.json`, run `codex plugin add <name>@personal` when the Codex CLI is available.
-  - **Preservation:** Never modify or remove the DIY `chatgpt-codex-imessage-plugin` entry (the legacy plugin name from the open-source era). Only manage the `bridge-pro-imessage` entry.
+  - For `chatgpt` and `codex`:
+    - Plugin name: `bridge-pro-imessage`
+    - Destination: `~/plugins/bridge-pro-imessage/`
+    - Manifest: Atomic 0600 write of `~/.agents/plugins/marketplace.json`, preserving other plugins
+    - `.mcp.json` schema:
+      ```json
+      {
+        "command": "<absolute-path-to-bundle>/Contents/MacOS/bridge-mcp",
+        "args": ["--product", "openai"],
+        "startup_timeout_sec": 15,
+        "tool_timeout_sec": 90,
+        "default_tools_approval_mode": "writes"
+      }
+      ```
+    - After writing `.mcp.json`, run `codex plugin add <name>@personal` when the Codex CLI is available.
+    - **Preservation:** Never modify or remove the DIY `chatgpt-codex-imessage-plugin` entry (the legacy plugin name from the open-source era). Only manage the `bridge-pro-imessage` entry.
+  - For `grok`:
+    - Primary path: run `grok mcp add bridge-pro-imessage --command <bundle>/Contents/MacOS/bridge-mcp --args --product grok`.
+    - Green status is reported only when the Grok CLI registration succeeds and `verify` can match the registered command.
+    - Fallback path: write `~/.grok/skills/bridge-pro-imessage/manifest.json` with the same command and `["--product", "grok"]` args.
+    - Fallback status is **`partial`**, not `installed`. It records intent and lets the UI explain the missing step, but doctor/verify must not treat it as green until a real watched-folder bridge exists.
 
 - `verify`: Check that installed manifests reference the current bundle and have correct command/args. Report mismatches (e.g., manifests pointing to old bundle versions or incorrect args).
 
-- `remove`: Delete the `bridge-pro-imessage` manifest entry from `~/.agents/plugins/marketplace.json` and the `~/plugins/bridge-pro-imessage/` directory. Preserve other plugins.
+- `remove`: Delete the `bridge-pro-imessage` manifest entry from `~/.agents/plugins/marketplace.json` and the `~/plugins/bridge-pro-imessage/` directory for ChatGPT/Codex, or run `grok mcp remove bridge-pro-imessage` and remove the skill-dir fallback for Grok. Preserve other plugins.
 
 **Flags:**
 
-- `--host <id>`: Target a specific host (e.g., `chatgpt`, `codex`). Fails if the host is not supported.
+- `--host <id>`: Target a specific host (e.g., `chatgpt`, `codex`, `grok`). Fails if the host is not supported.
 - `--all`: Target all supported hosts. Equivalent to running the command for each host sequentially.
 - `--refresh`: Force reinstall even if the manifest is already current. Useful after bundle upgrades.
 - `--json`: Emit JSON output for programmatic use (e.g., Bridge Pro GUI). Format:
@@ -231,7 +238,8 @@ The `host-assets` subcommand manages MCP plugin manifests for ChatGPT, Codex, an
     "ok": true,
     "hosts": {
       "chatgpt": {"status": "installed", "version": "1.2.2", "path": "/path/to/bundle"},
-      "codex": {"status": "missing"}
+      "codex": {"status": "missing"},
+      "grok": {"status": "partial", "method": "skill_dir", "reason": "grok-mcp-add-required"}
     }
   }
   ```

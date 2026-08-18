@@ -6,6 +6,7 @@ import os
 import pathlib
 import tempfile
 import unittest
+from unittest import mock
 
 from bridge_mcp.host_assets import VERSION, host_assets
 import bridge_mcp_main
@@ -260,6 +261,117 @@ class HostAssetsTests(unittest.TestCase):
         self.assertEqual(out["status"], "mismatch"); self.assertEqual(out["reason"], "bundle-unresolved")
         self.assertEqual(host_assets("detect", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "installed")
 
+    def test_detect_ok_remains_true_for_mismatch_status(self):
+        self._install()
+        mcp_path = self.home / "plugins/bridge-pro-imessage/.mcp.json"
+        payload = json.loads(mcp_path.read_text())
+        payload["mcpServers"]["bridge-pro-imessage"]["args"] = ["--product", "wrong"]
+        mcp_path.write_text(json.dumps(payload))
+        out = host_assets("detect", host="chatgpt", home=self.home)
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["hosts"]["chatgpt"]["status"], "mismatch")
+
+    def test_grok_fallback_is_partial_not_installed(self):
+        os.chmod(self.home, 0o755)
+        with mock.patch("bridge_mcp.host_assets._resolve_grok", return_value=None):
+            out = host_assets("install", host="grok", home=self.home)
+        self.assertFalse(out["ok"])
+        self.assertEqual(out["hosts"]["grok"]["status"], "partial")
+        self.assertEqual(out["hosts"]["grok"]["method"], "skill_dir")
+        manifest_path = self.home / ".grok/skills/bridge-pro-imessage/manifest.json"
+        self.assertTrue(manifest_path.exists())
+        self.assertEqual(oct(self.home.stat().st_mode & 0o777), "0o755")
+        self.assertEqual(oct((self.home / ".grok").stat().st_mode & 0o777), "0o700")
+        self.assertEqual(oct((self.home / ".grok/skills").stat().st_mode & 0o777), "0o700")
+        self.assertEqual(oct((self.home / ".grok/skills/bridge-pro-imessage").stat().st_mode & 0o777), "0o700")
+        manifest = json.loads(manifest_path.read_text())
+        self.assertEqual(manifest["command"], str(self.bundle / "Contents/MacOS/bridge-mcp"))
+        self.assertEqual(manifest["args"], ["--product", "grok"])
+        self.assertEqual(manifest["transport"], "watched_folder")
+        self.assertEqual(oct(manifest_path.stat().st_mode & 0o777), "0o600")
+        with mock.patch("bridge_mcp.host_assets._resolve_grok", return_value=None):
+            verify = host_assets("verify", host="grok", home=self.home)
+            detect = host_assets("detect", host="grok", home=self.home)
+        self.assertFalse(verify["ok"])
+        self.assertEqual(verify["hosts"]["grok"]["status"], "partial")
+        self.assertEqual(detect["hosts"]["grok"]["status"], "partial")
+
+    def test_grok_mcp_cli_install_and_verify(self):
+        fake_grok = str(self.tmp / "grok")
+        calls: list[list[str]] = []
+
+        def fake_run(args, **_kwargs):
+            calls.append(args)
+            if args[1:3] == ["mcp", "add"]:
+                return mock.Mock(returncode=0, stdout="", stderr="")
+            if args[1:3] == ["mcp", "list"]:
+                return mock.Mock(returncode=0, stdout="bridge-pro-imessage    running\n", stderr="")
+            if args[1:3] == ["mcp", "show"]:
+                return mock.Mock(returncode=0, stdout=f"command: {self.bundle / 'Contents/MacOS/bridge-mcp'}\nargs: --product grok\n", stderr="")
+            return mock.Mock(returncode=1, stdout="", stderr="")
+
+        with mock.patch("bridge_mcp.host_assets._resolve_grok", return_value=fake_grok), \
+             mock.patch("subprocess.run", side_effect=fake_run):
+            installed = host_assets("install", host="grok", home=self.home)
+            verified = host_assets("verify", host="grok", home=self.home)
+        self.assertTrue(installed["ok"])
+        self.assertEqual(installed["hosts"]["grok"]["status"], "installed")
+        self.assertEqual(installed["hosts"]["grok"]["method"], "mcp_cli")
+        self.assertTrue(verified["ok"])
+        self.assertEqual(verified["hosts"]["grok"]["status"], "installed")
+        self.assertIn([fake_grok, "mcp", "add", "bridge-pro-imessage", "--command", str(self.bundle / "Contents/MacOS/bridge-mcp"), "--args", "--product", "grok"], calls)
+
+    def test_grok_verify_registered_cli_with_unresolved_bundle_is_mismatch(self):
+        fake_grok = str(self.tmp / "grok")
+
+        def fake_run(args, **_kwargs):
+            if args[1:3] == ["mcp", "list"]:
+                return mock.Mock(returncode=0, stdout="bridge-pro-imessage\n", stderr="")
+            return mock.Mock(returncode=1, stdout="", stderr="")
+
+        os.environ.pop("BRIDGE_PRO_BUNDLE_ROOT")
+        with mock.patch("bridge_mcp.host_assets._resolve_grok", return_value=fake_grok), \
+             mock.patch("subprocess.run", side_effect=fake_run):
+            out = host_assets("verify", host="grok", home=self.home)
+        self.assertFalse(out["ok"])
+        self.assertEqual(out["hosts"]["grok"]["status"], "mismatch")
+        self.assertEqual(out["hosts"]["grok"]["reason"], "bundle-unresolved")
+
+    def test_grok_exact_name_matching(self):
+        import bridge_mcp.host_assets as ha
+        self.assertFalse(ha._is_mcp_registered("bridge-pro-imessage-old\nother\n", "bridge-pro-imessage"))
+        self.assertTrue(ha._is_mcp_registered("bridge-pro-imessage running /path\n", "bridge-pro-imessage"))
+
+    def test_grok_remove_reports_failed_cli_state(self):
+        fake_grok = str(self.tmp / "grok")
+
+        def fake_run(args, **_kwargs):
+            if args[1:3] == ["mcp", "remove"]:
+                return mock.Mock(returncode=1, stdout="", stderr="nope")
+            if args[1:3] == ["mcp", "list"]:
+                return mock.Mock(returncode=0, stdout="bridge-pro-imessage\n", stderr="")
+            return mock.Mock(returncode=1, stdout="", stderr="")
+
+        with mock.patch("bridge_mcp.host_assets._resolve_grok", return_value=fake_grok), \
+             mock.patch("subprocess.run", side_effect=fake_run):
+            out = host_assets("remove", host="grok", home=self.home)
+        self.assertFalse(out["ok"])
+        self.assertEqual(out["hosts"]["grok"]["status"], "installed")
+        self.assertIn("error", out["hosts"]["grok"])
+
+    def test_grok_rejects_symlinked_fallback_manifest(self):
+        skill_dir = self.home / ".grok/skills/bridge-pro-imessage"
+        skill_dir.mkdir(parents=True)
+        target = self.tmp / "outside.json"; target.write_text("{}")
+        (skill_dir / "manifest.json").symlink_to(target)
+        with mock.patch("bridge_mcp.host_assets._resolve_grok", return_value=None):
+            with self.assertRaises(ValueError):
+                host_assets("install", host="grok", home=self.home)
+            out = host_assets("remove", host="grok", home=self.home)
+        self.assertFalse(out["ok"])
+        self.assertEqual(out["hosts"]["grok"]["status"], "installed")
+        self.assertTrue(target.exists())
+
     def test_detection_selects_managed_server_by_name(self):
         self._install()
         mcp_path = self.home / "plugins/bridge-pro-imessage/.mcp.json"
@@ -331,8 +443,22 @@ class HostAssetsTests(unittest.TestCase):
             rc = bridge_mcp_main.main(["host-assets", "verify", "--all", "--json"])
         payload = json.loads(buf.getvalue())
         self.assertIn("hosts", payload)
-        self.assertEqual(sorted(payload["hosts"]), ["chatgpt", "codex"])
+        self.assertEqual(sorted(payload["hosts"]), ["chatgpt", "codex", "grok"])
         self.assertIn(rc, (0, 1))
+
+    def test_cli_accepts_grok_host(self):
+        import io, contextlib
+        buf = io.StringIO()
+        with mock.patch("bridge_mcp.host_assets.pathlib.Path.home", return_value=self.home), \
+             contextlib.redirect_stdout(buf):
+            rc = bridge_mcp_main.main([
+                "host-assets", "install", "--host", "grok", "--grok-path", str(self.tmp / "missing-grok"), "--json"
+            ])
+        payload = json.loads(buf.getvalue())
+        self.assertEqual(rc, 1)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["hosts"]["grok"]["status"], "partial")
+        self.assertTrue((self.home / ".grok/skills/bridge-pro-imessage/manifest.json").exists())
 
 
 if __name__ == "__main__":

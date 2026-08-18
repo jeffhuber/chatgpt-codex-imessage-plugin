@@ -17,11 +17,14 @@ def main(argv: list[str] | None = None) -> int:
         group.add_argument("--host")
         group.add_argument("--all", action="store_true")
         parser.add_argument("--refresh", action="store_true")
+        parser.add_argument("--codex-path")
+        parser.add_argument("--grok-path")
         parser.add_argument("--json", action="store_true", dest="as_json")
         args = parser.parse_args(argv[1:])
         from bridge_mcp.host_assets import host_assets
         try:
-            payload = host_assets(args.subcommand, host=args.host, all_hosts=args.all, refresh=args.refresh)
+            payload = host_assets(args.subcommand, host=args.host, all_hosts=args.all, refresh=args.refresh,
+                                  codex_path=args.codex_path, grok_path=args.grok_path)
         except (ValueError, OSError) as exc:
             print(json.dumps({"ok": False, "error": str(exc)}) if args.as_json else f"host-assets: {exc}", file=sys.stderr if not args.as_json else sys.stdout)
             return 1
