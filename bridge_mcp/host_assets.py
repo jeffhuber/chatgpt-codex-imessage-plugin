@@ -271,9 +271,11 @@ def _resolve_codex(codex_path: str | None) -> str | None:
 
 
 def _resolve_grok(grok_path: str | None, home: pathlib.Path) -> str | None:
+    # CLI discovery follows the current process PATH/HOME like `_resolve_codex`;
+    # the injected `home` is for managed asset paths, not alternate binary lookup.
     candidates = [grok_path] if grok_path else [
         shutil.which("grok"),
-        *(str(home / ".local" / "bin" / "grok") if c == "~/.local/bin/grok" else os.path.expanduser(c) for c in KNOWN_GROK_LOCATIONS),
+        *(os.path.expanduser(c) for c in KNOWN_GROK_LOCATIONS),
     ]
     for cand in candidates:
         resolved = _trusted_executable(cand)
@@ -370,6 +372,7 @@ def _grok_fallback_state(home: pathlib.Path, command: pathlib.Path | None,
 def _write_grok_fallback(home: pathlib.Path, command: pathlib.Path) -> None:
     skill_root, skill_dir, manifest_path = _grok_skill_paths(home)
     _reject_symlink_components(skill_root)
+    _ensure_private_dir(skill_dir)
     _write_json(manifest_path, {
         "name": BRIDGE_PRO_PLUGIN_NAME,
         "version": VERSION,
@@ -377,7 +380,6 @@ def _write_grok_fallback(home: pathlib.Path, command: pathlib.Path) -> None:
         "args": GROK_ARGS,
         "transport": "watched_folder",
     })
-    _ensure_private_dir(skill_dir)
 
 
 def _remove_grok_fallback(home: pathlib.Path) -> None:
@@ -513,7 +515,7 @@ def host_assets(subcommand: str, *, host: str | None = None, all_hosts: bool = F
             hosts.update({t: {"status": detected["asset_status"], "markers": detected["markers"]} for t in openai_targets})
         for t in grok_targets:
             hosts[t] = _grok_detect(home, grok_path=grok_path)
-        return {"ok": all(info.get("status") != "mismatch" for info in hosts.values()), "hosts": hosts}
+        return {"ok": True, "hosts": hosts}
 
     command: pathlib.Path | None = None
     if subcommand == "install":

@@ -259,6 +259,17 @@ class HostAssetsTests(unittest.TestCase):
         os.environ.pop("BRIDGE_PRO_BUNDLE_ROOT")
         out = host_assets("verify", host="chatgpt", home=self.home)["hosts"]["chatgpt"]
         self.assertEqual(out["status"], "mismatch"); self.assertEqual(out["reason"], "bundle-unresolved")
+        self.assertEqual(host_assets("detect", host="chatgpt", home=self.home)["hosts"]["chatgpt"]["status"], "installed")
+
+    def test_detect_ok_remains_true_for_mismatch_status(self):
+        self._install()
+        mcp_path = self.home / "plugins/bridge-pro-imessage/.mcp.json"
+        payload = json.loads(mcp_path.read_text())
+        payload["mcpServers"]["bridge-pro-imessage"]["args"] = ["--product", "wrong"]
+        mcp_path.write_text(json.dumps(payload))
+        out = host_assets("detect", host="chatgpt", home=self.home)
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["hosts"]["chatgpt"]["status"], "mismatch")
 
     def test_grok_fallback_is_partial_not_installed(self):
         with mock.patch("bridge_mcp.host_assets._resolve_grok", return_value=None):
