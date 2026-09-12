@@ -5,6 +5,22 @@ The file-bridge protocol has its own major/minor compatibility version.
 
 ## Unreleased
 
+## 1.3.1 - 2026-09-12
+
+- Port shared-core parity changes from Grok v1.4.4:
+  - Add snapshot size guard: `IMESSAGE_SNAPSHOT_MAX_MB` environment variable
+    (default 500 MB) protects against OOM on large databases; count chat.db +
+    chat.db-wal bytes; reject oversized snapshots with clear error message.
+  - Refactor `copy_chatdb()` to in-memory snapshot (`:memory:`) instead of
+    tempfile, eliminating same-UID disk exposure.
+  - Pass through `IMESSAGE_SNAPSHOT_MAX_MB` from LaunchAgent to Python helper
+    in both product and baked modes of `imessage_helper.c` wrapper.
+  - Inline AppleScript message body escaping (eliminates tempfile race).
+  - Exact-match policy for group chat IDs (prevent substring false positives).
+  - Add `action_contacts_lookup.needs_db = False` optimization.
+- All shared-core hashes now match Grok v1.4.4 (imessage_helper.c: cfa3c457...,
+  helper.py identity-normalized: 30dc56bd...).
+
 ## 1.3.0 - 2026-08-18
 
 - Fix live-install MCP startup after reinstall by exporting the resolved bridge
