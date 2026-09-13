@@ -5,7 +5,7 @@
     "host_display_name": "ChatGPT/Codex",
     "wrapper_name": "chatgpt-codex-imessage-helper",
     "confirmation_name": "chatgpt-codex-imessage-confirm",
-    "helper_version": "1.3.0",
+    "helper_version": "1.4.7",
     "product_id": "chatgpt-codex-imessage",
     "launchd_label": "com.jeffhuber.chatgpt-codex-imessage"
   },
@@ -19,7 +19,7 @@
       "logical_name": "helper.py",
       "path": "bin/helper.py",
       "normalization": "identity",
-      "sha256": "4cdee6c912c68d921b681faacb67d96424246b4cee6c5f21eaed78cf7666809f"
+      "sha256": "6f08690c1bc383973bd455fe3c12bd76d167b01a07f310d865a0c7aaa6394af8"
     },
     {
       "logical_name": "send_gate.py",
@@ -29,12 +29,12 @@
     {
       "logical_name": "imessage_helper.c",
       "path": "bin/imessage_helper.c",
-      "sha256": "90c0dd59ad4f233fb3e4db964f1d0b392249748ce0bfe361794a1a597a75980f"
+      "sha256": "cfa3c457336cf1eb142a59c1e828ab5cbb5a44659f63705cc648902e75a0e0dc"
     },
     {
       "logical_name": "confirm_imessage_send.m",
       "path": "bin/confirm_imessage_send.m",
-      "sha256": "377fc6bbeeaf45c945f7ba54c4ac911f8f2e83ace42d4ee8ee805a5c4612f894"
+      "sha256": "a7ec5c273623b974450c69558e2f8eb4ae0bcaffd93510108d1d97f03f0f4a12"
     }
   ]
 }

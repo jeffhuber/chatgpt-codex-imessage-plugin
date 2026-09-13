@@ -621,6 +621,25 @@ int main(int argc, char **argv) {
                       "%s/Contents/Helpers/imessage-confirm", bundle_path);
     if (ret != 0) return ret;
 
+    /* Host app icon for the native confirmation alert: a helper outside
+     * Contents/MacOS has no bundle icon of its own, so the confirm helper is
+     * told where the product's icon lives. Optional at runtime. */
+    char host_icon[PATH_MAX];
+    ret = format_path(host_icon, sizeof(host_icon), "host icon",
+                      "%s/Contents/Resources/AppIcon.icns", bundle_path);
+    if (ret != 0) return ret;
+    struct stat host_icon_st;
+    bool host_icon_available = true;
+    if (lstat(host_icon, &host_icon_st) != 0) {
+        if (errno == ENOENT) {
+            host_icon_available = false;
+        } else {
+            fprintf(stderr, "%s: cannot inspect host icon at %s (%s)\n",
+                    HELPER_DISPLAY_NAME, host_icon, strerror(errno));
+            return 2;
+        }
+    }
+
     char python_interp[PATH_MAX];
     ret = format_path(python_interp, sizeof(python_interp), "Python interpreter",
                       "%s/Contents/Frameworks/Python.framework/%s",
@@ -635,6 +654,11 @@ int main(int argc, char **argv) {
 
     ret = validate_ownership(confirm_helper, "confirm helper", current_uid, bundle_owner, true, true);
     if (ret != 0) return ret;
+
+    if (host_icon_available) {
+        ret = validate_ownership(host_icon, "host icon", current_uid, bundle_owner, true, false);
+        if (ret != 0) return ret;
+    }
 
     ret = validate_ownership(python_interp, "Python interpreter", current_uid, bundle_owner, true, true);
     if (ret != 0) return ret;
@@ -671,6 +695,8 @@ int main(int argc, char **argv) {
         putchar(',');
         print_json_field("confirm_helper", confirm_helper);
         putchar(',');
+        print_json_field("host_icon", host_icon);
+        putchar(',');
         print_json_field("python_interp", python_interp);
         puts("}");
         return 0;
@@ -702,6 +728,8 @@ int main(int argc, char **argv) {
     static char env_confirm_path[PATH_MAX + 64];
     static char env_send_gate_path[PATH_MAX + 64];
     static char env_host_display[128];
+    static char env_host_icon[PATH_MAX + 48];
+    static char env_snapshot_max_mb[64];
 
     if (set_env_value(env_home, sizeof(env_home), "HOME", pw->pw_dir) != 0 ||
         set_env_value(env_tmpdir, sizeof(env_tmpdir), "TMPDIR", tmpdir) != 0 ||
@@ -720,9 +748,25 @@ int main(int argc, char **argv) {
         return 7;
     }
 
+    if (host_icon_available &&
+        set_env_value(env_host_icon, sizeof(env_host_icon),
+                      "IMESSAGE_HOST_ICON_PATH", host_icon) != 0) {
+        return 7;
+    }
+
     if (is_host && set_env_value(env_policy_dir, sizeof(env_policy_dir),
                                   "IMESSAGE_POLICY_DIR", policy_dir) != 0) {
         return 7;
+    }
+
+    const char *snapshot_max_mb_env = getenv("IMESSAGE_SNAPSHOT_MAX_MB");
+    bool snapshot_max_mb_set = false;
+    if (snapshot_max_mb_env && snapshot_max_mb_env[0] != '\0') {
+        if (set_env_value(env_snapshot_max_mb, sizeof(env_snapshot_max_mb),
+                          "IMESSAGE_SNAPSHOT_MAX_MB", snapshot_max_mb_env) != 0) {
+            return 7;
+        }
+        snapshot_max_mb_set = true;
     }
 
     static char *new_env_host[] = {
@@ -738,6 +782,8 @@ int main(int argc, char **argv) {
         env_send_gate_path,
         env_host_display,
         NULL,
+        NULL,
+        NULL,
     };
 
     static char *new_env_manager[] = {
@@ -752,7 +798,20 @@ int main(int argc, char **argv) {
         env_send_gate_path,
         env_host_display,
         NULL,
+        NULL,
+        NULL,
     };
+
+    size_t host_next = (sizeof(new_env_host) / sizeof(new_env_host[0])) - 3;
+    size_t manager_next = (sizeof(new_env_manager) / sizeof(new_env_manager[0])) - 3;
+    if (host_icon_available) {
+        new_env_host[host_next++] = env_host_icon;
+        new_env_manager[manager_next++] = env_host_icon;
+    }
+    if (snapshot_max_mb_set) {
+        new_env_host[host_next++] = env_snapshot_max_mb;
+        new_env_manager[manager_next++] = env_snapshot_max_mb;
+    }
 
     environ = is_host ? new_env_host : new_env_manager;
 
@@ -815,6 +874,7 @@ int main(int argc, char **argv) {
     static char allowlist_buf[PATH_MAX + 64];
     static char root_policy_buf[64];
     static char host_display_buf[128];
+    static char snapshot_max_mb_buf[64];
 
     if (set_env_value(home_buf, sizeof(home_buf), "HOME",
                       pw && pw->pw_dir ? pw->pw_dir : "/") != 0 ||
@@ -834,6 +894,16 @@ int main(int argc, char **argv) {
         return 7;
     }
 
+    const char *snapshot_max_mb_env = getenv("IMESSAGE_SNAPSHOT_MAX_MB");
+    bool snapshot_max_mb_set = false;
+    if (snapshot_max_mb_env && snapshot_max_mb_env[0] != '\0') {
+        if (set_env_value(snapshot_max_mb_buf, sizeof(snapshot_max_mb_buf),
+                          "IMESSAGE_SNAPSHOT_MAX_MB", snapshot_max_mb_env) != 0) {
+            return 7;
+        }
+        snapshot_max_mb_set = true;
+    }
+
     static char *new_env[] = {
         "PATH=/usr/bin:/bin",
         home_buf,
@@ -845,7 +915,11 @@ int main(int argc, char **argv) {
         root_policy_buf,
         host_display_buf,
         NULL,
+        NULL,
     };
+    if (snapshot_max_mb_set) {
+        new_env[(sizeof(new_env) / sizeof(new_env[0])) - 2] = snapshot_max_mb_buf;
+    }
     environ = new_env;
 
     char *exec_argv[] = {
