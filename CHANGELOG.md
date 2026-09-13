@@ -18,7 +18,7 @@ The file-bridge protocol has its own major/minor compatibility version.
     types before applying last-10 phone matching, ensuring allowlist/blocklist
     entries operate only on their intended identifier class.
 - All shared-core hashes now match Grok v1.4.7 (helper.py identity-normalized:
-  0b8dab7d...).
+  6f08690c...).
 
 ## 1.3.1 - 2026-09-12
 
