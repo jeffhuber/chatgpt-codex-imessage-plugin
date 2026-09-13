@@ -24,7 +24,7 @@ from typing import Any
 from bridge_mcp.host_detection import BRIDGE_PRO_PLUGIN_NAME, DIY_PLUGIN_NAME, detect_hosts
 
 SUPPORTED_HOSTS = ("chatgpt", "codex", "grok")   # chatgpt/codex share the personal marketplace
-VERSION = "1.3.1"
+VERSION = "1.4.7"
 MCP_RELPATH = "Contents/MacOS/bridge-mcp"
 OPENAI_HOSTS = ("chatgpt", "codex")
 GROK_ARGS = ["--product", "grok"]

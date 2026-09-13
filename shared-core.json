@@ -5,7 +5,7 @@
     "host_display_name": "ChatGPT/Codex",
     "wrapper_name": "chatgpt-codex-imessage-helper",
     "confirmation_name": "chatgpt-codex-imessage-confirm",
-    "helper_version": "1.3.1",
+    "helper_version": "1.4.7",
     "product_id": "chatgpt-codex-imessage",
     "launchd_label": "com.jeffhuber.chatgpt-codex-imessage"
   },
@@ -19,7 +19,7 @@
       "logical_name": "helper.py",
       "path": "bin/helper.py",
       "normalization": "identity",
-      "sha256": "30dc56bd8cd876bdff85ce488e1b519161300105bac01d1366b3e446c3ef5557"
+      "sha256": "6f08690c1bc383973bd455fe3c12bd76d167b01a07f310d865a0c7aaa6394af8"
     },
     {
       "logical_name": "send_gate.py",

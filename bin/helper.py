@@ -9,7 +9,7 @@ and deletes the request.
 Security posture:
   - Actions are strictly whitelisted (no eval/exec/shell-out).
   - All SQL uses parameterized queries.
-  - chat.db is copied to a per-run tempfile (cleaned up on exit).
+  - chat.db is snapshotted to an in-memory database using SQLite's backup API.
   - Read policy is applied before any message text is returned.
   - 2FA codes, card numbers, and SSN patterns are redacted in responses.
   - Response writes are atomic (tmp + rename) so the agent never reads a
@@ -113,7 +113,7 @@ _PRODUCT_ENV_VARS = (
 )
 WRAPPER_MODE = "product" if any(v in os.environ for v in _PRODUCT_ENV_VARS) else "baked"
 
-HELPER_VERSION = "1.3.1"
+HELPER_VERSION = "1.4.7"
 PROTOCOL_VERSION = "1.2"
 
 # Bridge role. The DIY install and every host bridge run as "host". A
@@ -212,10 +212,10 @@ MAX_HOURS = 24 * 30
 MAX_LIMIT = 500
 MAX_SEARCH_LEN = 200
 # Snapshot size guard: in-memory snapshots exceeding this limit are rejected.
-# Override with IMESSAGE_SNAPSHOT_MAX_MB. 500 MB fits typical chat.db sizes
+# Override with IMESSAGE_SNAPSHOT_MAX_MB. 1024 MB fits typical chat.db sizes
 # while avoiding OOM on resource-constrained systems. Operators with larger
 # databases should review memory availability before raising this limit.
-DEFAULT_SNAPSHOT_MAX_MB = 500
+DEFAULT_SNAPSHOT_MAX_MB = 1024
 # list_chats has its own window: it returns no bodies, only which threads
 # exist, so a multi-year window is safe and useful for policy discovery.
 MAX_LIST_CHATS_DAYS = 3650
@@ -883,17 +883,32 @@ def _matches_list(chat_id: str, sender: str, entries: tuple[str, ...] | list[str
     snd_l10 = _last10(snd)
     for entry in entries:
         entry_l10 = _last10(entry)
-        # Phone number: match last 10 digits
-        if entry_l10 and (entry_l10 == cid_l10 or entry_l10 == snd_l10):
+        lowered = entry.lower()
+        # Group chat IDs (starting with "chat") must match exactly, never via last-10.
+        # This prevents "chat1234567890" from colliding with phone "+11234567890".
+        entry_is_group = lowered.startswith("chat")
+        cid_is_group = cid.lower().startswith("chat")
+        snd_is_group = snd.lower().startswith("chat")
+        
+        # Email: exact case-insensitive match
+        if "@" in entry and (lowered == cid.lower() or lowered == snd.lower()):
             return True
-        if not entry_l10:
-            lowered = entry.lower()
-            # Email: exact case-insensitive match
-            if "@" in entry and (lowered == cid.lower() or lowered == snd.lower()):
+        
+        # Group chat ID entry: exact case-insensitive match only
+        if entry_is_group:
+            if lowered == cid.lower() or lowered == snd.lower():
                 return True
-            # Group chat ID: exact case-insensitive match (not substring)
-            # to prevent "chat123" from matching "chat1234567890"
-            if "@" not in entry and (lowered == cid.lower() or lowered == snd.lower()):
+        # Phone number entry: match last 10 digits, but check each side independently
+        elif entry_l10:
+            # Match against chat_id only if chat_id is not a group
+            if cid_l10 and not cid_is_group and entry_l10 == cid_l10:
+                return True
+            # Match against sender only if sender is not a group
+            if snd_l10 and not snd_is_group and entry_l10 == snd_l10:
+                return True
+        # Fallback: non-email, non-group entries lacking 10 digits match exactly
+        elif "@" not in entry:
+            if lowered == cid.lower() or lowered == snd.lower():
                 return True
     return False
 
@@ -1248,7 +1263,7 @@ def copy_chatdb() -> sqlite3.Connection:
     exposure: the snapshot exists only in this process's memory space.
     
     Raises RuntimeError if chat.db + chat.db-wal exceeds the configured
-    size limit (IMESSAGE_SNAPSHOT_MAX_MB, default 500 MB). Large databases
+    size limit (IMESSAGE_SNAPSHOT_MAX_MB, default 1024 MB). Large databases
     can cause OOM during the in-memory snapshot; operators should ensure
     adequate memory before raising the limit. SQLite's backup API includes
     uncommitted WAL data in the snapshot, so both files count against the limit.

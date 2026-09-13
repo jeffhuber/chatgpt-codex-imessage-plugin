@@ -5,6 +5,21 @@ The file-bridge protocol has its own major/minor compatibility version.
 
 ## Unreleased
 
+## 1.4.7 - 2026-09-13
+
+- Sync shared-core implementation from grokbot-imessage-skill v1.4.7:
+  - Bump default snapshot ceiling to 1024 MB (was 500 MB) to accommodate larger
+    chat.db databases without OOM on typical systems.
+  - Fix group chat ID matching: prevent phone number last-10 collisions with
+    group chat IDs by checking group-vs-phone type on both the policy entry
+    and the chat_id/sender being tested. A group ID entry like "chat1234567890"
+    now matches only group chats, never phone "+11234567890".
+  - Update `_matches_list()` logic to independently verify chat_id and sender
+    types before applying last-10 phone matching, ensuring allowlist/blocklist
+    entries operate only on their intended identifier class.
+- All shared-core hashes now match Grok v1.4.7 (helper.py identity-normalized:
+  6f08690c...).
+
 ## 1.3.1 - 2026-09-12
 
 - Port shared-core parity changes from Grok v1.4.4:
