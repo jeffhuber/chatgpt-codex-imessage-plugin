@@ -186,8 +186,8 @@ request directories, and native confirmation helper.
   "needs_reply": [
     {
       "chat_id": "+14155551234",
-      "label": "Angel Vossough",
-      "contact_name": "Angel Vossough",
+      "label": "Alex Example",
+      "contact_name": "Alex Example",
       "display_name": "",
       "last_ts": "2026-08-10T14:32:15",
       "last_text": "Are we still on for Thursday?",
@@ -264,7 +264,7 @@ Case-insensitive substring search across all threads. Results are sorted by date
   "id": "abc123",
   "action": "chat_history",
   "params": {
-    "chat": "Angel Vossough",
+    "chat": "Alex Example",
     "days": 14,
     "limit": 100
   }
@@ -283,13 +283,13 @@ Case-insensitive substring search across all threads. Results are sorted by date
   "id": "abc123",
   "ok": true,
   "action": "chat_history",
-  "chat_query": "Angel Vossough",
+  "chat_query": "Alex Example",
   "resolved_substr": "5551234",
   "count": 2,
   "messages": [
     {
       "chat_id": "+14155551234",
-      "contact_name": "Angel Vossough",
+      "contact_name": "Alex Example",
       "ts": "2026-08-10T14:32:15",
       "is_from_me": false,
       "text": "Are we still on for Thursday?"
@@ -315,7 +315,7 @@ Case-insensitive substring search across all threads. Results are sorted by date
   "id": "abc123",
   "action": "response_stats",
   "params": {
-    "chat": "Angel Vossough",
+    "chat": "Alex Example",
     "hours": 24
   }
 }
@@ -327,7 +327,7 @@ Case-insensitive substring search across all threads. Results are sorted by date
   "id": "abc123",
   "ok": true,
   "action": "response_stats",
-  "chat_query": "Angel Vossough",
+  "chat_query": "Alex Example",
   "resolved_substr": "5551234",
   "hours": 24,
   "sample_size": 15,
@@ -353,7 +353,7 @@ Computes reply-time statistics over the specified window.
   "id": "abc123",
   "action": "contacts_lookup",
   "params": {
-    "name": "Angel"
+    "name": "Alex"
   }
 }
 ```
@@ -364,11 +364,11 @@ Computes reply-time statistics over the specified window.
   "id": "abc123",
   "ok": true,
   "action": "contacts_lookup",
-  "query": "Angel",
+  "query": "Alex",
   "match_count": 1,
   "matches": [
     {
-      "name": "Angel Vossough",
+      "name": "Alex Example",
       "phone_last10": "4155551234"
     }
   ]
