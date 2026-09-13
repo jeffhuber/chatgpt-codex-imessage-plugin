@@ -10,6 +10,8 @@ endorsed, or supported by Apple or OpenAI.
 **Security:** Report vulnerabilities privately as described in
 [SECURITY.md](./SECURITY.md).
 
+> **Prefer a Mac app?** A commercial alternative with drag-and-drop installation and automatic updates is available at [messagebridge.app](https://messagebridge.app).
+
 ## Support Boundary
 
 | Surface | Support | Why |
