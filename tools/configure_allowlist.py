@@ -7,6 +7,7 @@ import argparse
 import os
 import pwd
 import re
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -59,14 +60,39 @@ def read_entries(path: Path) -> list[str]:
 
 
 def install_entries(path: Path, entries: list[str]) -> None:
-    if path != allowlist_path():
+    expected_path = allowlist_path()
+    if path != expected_path:
         raise RuntimeError("refusing an unexpected policy destination")
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
-        handle.write(HEADER)
-        for entry in sorted(set(entries), key=str.casefold):
-            handle.write(f"{entry}\n")
-        temporary = Path(handle.name)
+    
+    if path.exists():
+        if path.is_symlink():
+            raise RuntimeError("allowlist path must not be a symlink")
+        if os.path.abspath(str(path)) != os.path.realpath(str(path)):
+            raise RuntimeError("allowlist path must not be a symlink")
+    else:
+        parent_canonical = path.parent.resolve(strict=False)
+        if parent_canonical != expected_path.parent.resolve(strict=False):
+            raise RuntimeError("allowlist parent directory mismatch")
+    
+    temp_dir_path = tempfile.mkdtemp(prefix="chatgpt-codex-allowlist-", suffix=".tmp")
+    temp_dir = Path(temp_dir_path)
+    
     try:
+        fd = os.open(temp_dir, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            metadata = os.fstat(fd)
+            if metadata.st_uid != os.getuid():
+                raise RuntimeError("staging directory must be owned by current user")
+            if stat.S_IMODE(metadata.st_mode) & 0o077:
+                raise RuntimeError("staging directory must not have group/world permissions")
+        finally:
+            os.close(fd)
+        
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, dir=temp_dir) as handle:
+            handle.write(HEADER)
+            for entry in sorted(set(entries), key=str.casefold):
+                handle.write(f"{entry}\n")
+            temporary = Path(handle.name)
         subprocess.run(
             [
                 "/usr/bin/sudo",
@@ -82,6 +108,19 @@ def install_entries(path: Path, entries: list[str]) -> None:
             ],
             check=True,
         )
+        
+        try:
+            metadata = path.lstat()
+            if not stat.S_ISREG(metadata.st_mode):
+                raise RuntimeError("installed allowlist is not a regular file")
+            if os.path.abspath(str(path)) != os.path.realpath(str(path)):
+                raise RuntimeError("installed allowlist is a symlink")
+            post_install_canonical = path.resolve(strict=True)
+            if post_install_canonical != expected_path.resolve(strict=False):
+                raise RuntimeError("allowlist was not created at expected location")
+        except OSError as e:
+            raise RuntimeError(f"allowlist verification failed: {e}")
+        
         subprocess.run(["/usr/bin/sudo", "/bin/chmod", "-N", str(path)], check=True)
         subprocess.run(
             [
@@ -94,7 +133,10 @@ def install_entries(path: Path, entries: list[str]) -> None:
             check=True,
         )
     finally:
-        temporary.unlink(missing_ok=True)
+        try:
+            shutil.rmtree(temp_dir)
+        except OSError:
+            pass
 
 
 def main() -> int:
