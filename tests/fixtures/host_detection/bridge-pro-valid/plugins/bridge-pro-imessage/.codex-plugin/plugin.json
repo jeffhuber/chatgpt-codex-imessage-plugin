@@ -1,6 +1,6 @@
 {
   "name": "bridge-pro-imessage",
-  "version": "1.4.7",
+  "version": "1.4.8",
   "description": "Bridge Pro iMessage bridge (managed by Bridge Pro.app; do not edit).",
   "mcpServers": "./.mcp.json",
   "interface": {

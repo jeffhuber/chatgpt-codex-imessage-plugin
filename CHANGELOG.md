@@ -5,6 +5,20 @@ The file-bridge protocol has its own major/minor compatibility version.
 
 ## Unreleased
 
+## 1.4.8 - 2026-09-13
+
+- Sync shared-core implementation from grokbot-imessage-skill v1.4.8:
+  - Fix `configure_allowlist.py` to work with hardened install layout where the
+    allowlist parent directory is root-owned. The tool now stages its tempfile
+    in a user-owned private directory (under `/tmp`) instead of attempting to
+    write to the root-owned config directory, while maintaining all security
+    checks and using `sudo install` to atomically place the file in its final
+    location.
+  - Add symlink protection and post-install verification checks to prevent TOCTOU
+    attacks during allowlist configuration.
+- All shared-core hashes continue to match Grok v1.4.8 (helper.py
+  identity-normalized: 6f08690c...).
+
 ## 1.4.7 - 2026-09-13
 
 - Sync shared-core implementation from grokbot-imessage-skill v1.4.7:
