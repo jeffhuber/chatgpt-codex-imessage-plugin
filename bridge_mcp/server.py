@@ -6,7 +6,7 @@ from typing import Any
 import pathlib
 from bridge_mcp.client import BridgeClient, BridgeError, resolve_runtime_bridge
 
-SERVER_VERSION = "1.4.7"
+SERVER_VERSION = "1.4.8"
 SUPPORTED_PROTOCOL_MAJOR = "1"
 _compatible_checked = False
 _client: BridgeClient | None = None
